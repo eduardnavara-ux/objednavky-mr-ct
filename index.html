@@ -375,7 +375,9 @@ function viewHovor() {
     ${S.nahrava
       ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit a zpracovat <span class="dot"></span> <span id="rectime">0:00</span></button>`
       : `<button class="primary full big" data-act="nahravat" ${S.busy ? "disabled" : ""}>🎙 Nahrávat hovor</button>`}
-    <small>Spusťte nahrávání, pak vytočte číslo. iPhone položte k reproduktoru telefonu. Po ukončení se termíny vytáhnou samy.</small>
+    <small>Spusťte nahrávání, pak vytočte číslo. iPhone položte k reproduktoru telefonu. Po ukončení se termíny vytáhnou samy.<br>
+      Přepis: <b>${motor() === "soniox" ? "Soniox (placený, přesnější)" : "iPhone / prohlížeč (zdarma)"}</b> ·
+      <a href="#" data-act="motor">přepnout</a></small>
     <label class="f" style="margin-top:14px">Přepis hovoru</label>
     <textarea id="prepis" placeholder="Tady se objeví přepis – nebo ho sem vložte ručně…"></textarea>
     <div class="grid2" style="margin-top:8px">
@@ -586,8 +588,13 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (act === "vytahni") return vytahni();
-  if (act === "nahravat") return nahravatStart();
-  if (act === "nahravatstop") { rec?.stop(); b.disabled = true; b.textContent = "Dokončuji přepis…"; return; }
+  if (act === "nahravat") return motor() === "soniox" ? nahravatStart() : diktovatStart();
+  if (act === "motor") { try { localStorage.setItem("prepisMotor", motor() === "soniox" ? "apple" : "soniox"); } catch {} render(); return; }
+  if (act === "nahravatstop") {
+    b.disabled = true; b.textContent = "Dokončuji přepis…";
+    if (sr) { srStop = true; try { sr.stop(); } catch { srKonec(); } } else rec?.stop();
+    return;
+  }
   if (act === "zahodit") { S.vysledek = null; render(); return; }
   if (act === "potvrdit") return potvrdit();
   if (act === "kopirovat") {
@@ -661,6 +668,59 @@ app.addEventListener("change", async (e) => {
     await nacti(); render(); toast("E-mail uložen"); return;
   }
 });
+
+// ---------- Nahrávání zdarma (Web Speech API – na iPhonu Apple, v Chrome Google) ----------
+const motor = () => { try { return localStorage.getItem("prepisMotor") || "apple"; } catch { return "apple"; } };
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let sr = null, srStop = false, srSession = "";
+function srKonec() {
+  R.final += srSession ? srSession + " " : ""; srSession = "";
+  sr = null; nahravatUklid(); prepisZobraz(""); render();
+  if (S.prepis.trim().length > 20) vytahni(); else toast("Přepis je prázdný");
+}
+async function diktovatStart() {
+  if (!SR) {
+    S.msg = { t: "err", m: "Tento prohlížeč neumí přepis zdarma. Klepněte do pole Přepis a použijte diktování na klávesnici (ikona mikrofonu), nebo přepněte na Soniox." };
+    render(); return;
+  }
+  R.final = S.prepis ? S.prepis.trim() + "\n" : ""; srSession = ""; srStop = false;
+  S.nahrava = true; S.msg = null; S.vysledek = null; render();
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  const t0 = Date.now();
+  recTimer = setInterval(() => {
+    const el = document.getElementById("rectime"); if (!el) return;
+    const sec = Math.floor((Date.now() - t0) / 1000); el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }, 1000);
+  const spust = () => {
+    sr = new SR();
+    sr.lang = "cs-CZ"; sr.continuous = true; sr.interimResults = true;
+    sr.onresult = (ev) => {
+      let fin = "", interim = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        const t = ev.results[i][0].transcript;
+        if (ev.results[i].isFinal) fin += t + " "; else interim += t;
+      }
+      srSession = fin.trim();
+      prepisZobraz((srSession ? srSession + " " : "") + interim);
+    };
+    sr.onerror = (ev) => {
+      if (ev.error === "no-speech" || ev.error === "aborted") return;
+      srStop = true;
+      S.msg = { t: "err", m: ev.error === "not-allowed" || ev.error === "service-not-allowed"
+        ? "Přepis zdarma není povolený (mikrofon / rozpoznávání řeči). Na iPhonu otevřete aplikaci v Safari, nebo použijte diktování na klávesnici."
+        : "Přepis selhal: " + ev.error };
+    };
+    sr.onend = () => {
+      if (!srStop) { // prohlížeč ukončil sám (ticho) – pokračujeme dál
+        R.final += srSession ? srSession + " " : ""; srSession = "";
+        try { spust(); return; } catch {}
+      }
+      srKonec();
+    };
+    sr.start();
+  };
+  try { spust(); } catch (e) { srStop = true; srKonec(); S.msg = { t: "err", m: "Přepis nejde spustit: " + e.message }; render(); }
+}
 
 // ---------- Nahrávání (Soniox) ----------
 let rec = null, wakeLock = null, recTimer = null;
