@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Objednávky MR / CT</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Objednávky">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f3d5e">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root {
+    --navy: #0f3d5e; --navy-2: #1c5a85; --bg: #f3f5f8; --card: #fff; --text: #17212b;
+    --muted: #66727f; --line: #e2e7ee; --ok: #1f7a4d; --ok-bg: #e7f5ee; --warn: #8a5a00; --warn-bg: #fff4dc;
+    --err: #b42318; --err-bg: #fdecea; --r: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--navy); color: #fff;
+    padding: calc(env(safe-area-inset-top) + 10px) 14px 0; }
+  header .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; }
+  header .who { font-size: 12px; opacity: .8; background: none; border: 0; color: #fff; padding: 4px 0; }
+  nav { display: flex; gap: 4px; margin-top: 10px; }
+  nav button { flex: 1; background: transparent; color: #cfe0ee; border: 0; padding: 10px 4px 12px;
+    font: inherit; font-weight: 600; border-bottom: 3px solid transparent; }
+  nav button.on { color: #fff; border-bottom-color: #7cc4ff; }
+  nav .n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 10px;
+    background: rgba(255,255,255,.18); font-size: 12px; line-height: 20px; }
+  main { max-width: 760px; margin: 0 auto; padding: 14px 12px calc(env(safe-area-inset-bottom) + 40px); }
+  .card { background: var(--card); border-radius: var(--r); padding: 14px; margin-bottom: 12px;
+    box-shadow: 0 1px 2px rgba(16,24,40,.06); border: 1px solid var(--line); }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 4px 8px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row.between { justify-content: space-between; }
+  .grow { flex: 1; }
+  input, select, textarea { width: 100%; font: inherit; padding: 11px 12px; border: 1px solid #cdd5df; border-radius: 10px;
+    background: #fff; color: var(--text); }
+  input:focus, select:focus, textarea:focus { outline: 2px solid #7cc4ff; border-color: var(--navy-2); }
+  textarea { min-height: 160px; resize: vertical; }
+  label.f { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  @media (max-width: 420px) { .grid2.resp { grid-template-columns: 1fr; } }
+  button, .btn { font: inherit; font-weight: 600; border-radius: 10px; padding: 10px 14px; border: 1px solid #cdd5df;
+    background: #fff; color: var(--text); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center;
+    justify-content: center; gap: 6px; }
+  button.primary, .btn.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
+  button.ok, .btn.ok { background: var(--ok); color: #fff; border-color: var(--ok); }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 6px 8px; }
+  button:disabled { opacity: .5; }
+  .full { width: 100%; margin-top: 10px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { padding: 6px 10px; border-radius: 999px; font-size: 14px; font-weight: 500; background: #eef3f8; border: 1px solid #d6e1ec; }
+  .seg { display: flex; background: #eef3f8; border-radius: 10px; padding: 3px; }
+  .seg button { flex: 1; border: 0; background: transparent; padding: 8px; }
+  .seg button.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .item { display: flex; gap: 8px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .item:first-of-type { border-top: 0; }
+  .item .grow { min-width: 0; }
+  small, .muted { color: var(--muted); font-size: 13px; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 6px; background: #eef3f8; color: var(--navy); font-weight: 600; }
+  .warn { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-top: 8px; }
+  .err { background: var(--err-bg); color: var(--err); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 12px; }
+  .okmsg { background: var(--ok-bg); color: var(--ok); border-radius: 8px; padding: 8px 10px; font-size: 14px; margin-bottom: 12px; }
+  .quote { font-style: italic; color: var(--muted); font-size: 13px; border-left: 3px solid var(--line); padding-left: 8px; margin-top: 8px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 6px 0; }
+  details summary { cursor: pointer; color: var(--navy-2); font-size: 14px; margin-top: 8px; }
+  pre.mail { white-space: pre-wrap; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f9fb;
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 8px 0 0; }
+  .terms { margin: 6px 0 0; padding: 0; list-style: none; }
+  .terms li { padding: 4px 0; display: flex; gap: 6px; align-items: baseline; }
+  .spin { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.5); border-top-color: #fff;
+    border-radius: 50%; animation: s .8s linear infinite; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .login { max-width: 380px; margin: 40px auto; }
+  .chk { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+  .chk input { width: auto; }
+  .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); transform: translateX(-50%);
+    background: #17212b; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+// ---------- Nastavení ----------
+const SUPABASE_URL = "https://cjgfarbusdvieempommt.supabase.co";
+const SUPABASE_KEY = "sb_publishable_TVLQbs-h-4FMHu44Znq2sA_Q7uHMyEm";
+// Telefon do mailu pro změnu / zrušení termínu
+const TEL = { MR: "257273202", CT: "257272510" };
+// Výchozí čísla recepce (založí se do záložky Čísla při prvním spuštění)
+const VOLAT = { MR: "257273202", CT: "257272510" };
+const VYCHOZI_KONTAKTY = [
+  { nazev: "Recepce MR", telefon: VOLAT.MR, typ: "MR", poradi: 1 },
+  { nazev: "Recepce CT (obstřiky)", telefon: VOLAT.CT, typ: "CT", poradi: 2 },
+];
+const MISTA = {
+  "2p": "Nemocnice Na Homolce, 2.patro, prostor operačních sálů neurochirurgie",
+  "gama": "Nemocnice Na Homolce, budova Gama nože, při spodní vrátnici",
+  "4p": "Nemocnice Na Homolce, 4.patro",
+};
+const MISTA_KRATCE = { "2p": "2. patro", "gama": "Gama", "4p": "4. patro" };
+const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT "];
+
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+const app = document.getElementById("app");
+
+const S = {
+  user: null, tab: "fronta", rows: [], editId: null, kontakty: [], editKontakt: null,
+  hovorTyp: "MR", vybrano: null, prepis: "", vysledek: null, busy: false,
+  msg: null, showOld: false, loginMode: "login",
+};
+
+// ---------- Pomocné ----------
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const enc = encodeURIComponent;
+const typZVykonu = (v) => (/^\s*MR\b/i.test(v || "") ? "MR" : "CT");
+const dnesISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDatum = (d) => { if (!d) return "?"; const [y, m, dd] = d.split("-").map(Number); return `${dd}.${m}.${y}`; };
+const fmtCas = (t) => { if (!t) return "?"; const [h, mi] = t.split(":"); return `${Number(h)}:${mi}`; };
+const DNY = ["ne", "po", "út", "st", "čt", "pá", "so"];
+const denTydne = (d) => DNY[new Date(d + "T12:00:00").getDay()];
+const mistoKod = (text) => Object.keys(MISTA).find((k) => MISTA[k] === text) || null;
+const mistoKratce = (text) => MISTA_KRATCE[mistoKod(text)] || text || "?";
+
+function genitivPredmet(v) {
+  const m = (v || "").trim();
+  if (/^MR\s*Lp$/i.test(m)) return "MR bederní páteře";
+  if (/^MR\s*Cp$/i.test(m)) return "MR krční páteře";
+  if (/^obstřik\b/i.test(m)) return "obstřiku" + m.slice(7);
+  return m;
+}
+function vykonVeVete(v) {
+  const m = (v || "").trim();
+  if (/^obstřik\b/i.test(m)) return "obstřiku" + m.slice(7);
+  return m;
+}
+function sestavMail(rows) {
+  const r = [...rows].sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
+  const predmet = "termín " + r.map((x) => genitivPredmet(x.vykon)).join(" a ");
+  const vety = r.map((x, i) =>
+    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}. Pro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.`);
+  if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += " Po absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
+  const telo = `Dobrý den,\n\n${vety.join("\n\n")}\n\nS pozdravem,\nNavara`;
+  return { predmet, telo };
+}
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const gmailWeb = (to, su, body) => `https://mail.google.com/mail/?view=cm&fs=1&to=${enc(to || "")}&su=${enc(su)}&body=${enc(body)}`;
+const gmailApp = (to, su, body) => `googlegmail:///co?to=${enc(to || "")}&subject=${enc(su)}&body=${enc(body)}`;
+
+function varovani(datum, cas) {
+  const w = [];
+  if (datum) {
+    const den = new Date(datum + "T12:00:00").getDay();
+    if (den === 0 || den === 6) w.push("Termín vychází na víkend.");
+    if (datum < dnesISO()) w.push("Datum je v minulosti.");
+  }
+  if (cas) { const h = Number(cas.split(":")[0]); if (h < 6 || h >= 20) w.push("Čas je mimo 6:00–20:00."); }
+  return w;
+}
+
+let toastT;
+function toast(t) {
+  document.querySelector(".toast")?.remove();
+  const el = document.createElement("div"); el.className = "toast"; el.textContent = t; document.body.appendChild(el);
+  clearTimeout(toastT); toastT = setTimeout(() => el.remove(), 2200);
+}
+
+// ---------- Data ----------
+async function nacti() {
+  const { data, error } = await sb.from("objednavky").select("*").neq("stav", "zruseno")
+    .order("created_at", { ascending: true }).limit(2000);
+  if (error) { S.msg = { t: "err", m: "Načtení selhalo: " + error.message }; return; }
+  S.rows = data;
+  await nactiKontakty();
+}
+async function nactiKontakty() {
+  let { data, error } = await sb.from("kontakty").select("*").order("poradi").order("nazev");
+  if (error) { S.msg = { t: "err", m: "Načtení čísel selhalo: " + error.message }; return; }
+  if (!data.length && !S.kontaktySeeded) {
+    S.kontaktySeeded = true;
+    await sb.from("kontakty").insert(VYCHOZI_KONTAKTY);
+    ({ data } = await sb.from("kontakty").select("*").order("poradi").order("nazev"));
+  }
+  S.kontakty = data || [];
+}
+const cislo = (typ) => S.kontakty.find((k) => k.typ === typ)?.telefon || VOLAT[typ];
+const telHref = (t) => "tel:" + String(t).replace(/[^\d+]/g, "");
+const cekajici = (typ) => S.rows.filter((r) => r.stav === "ceka" && (!typ || r.typ === typ));
+
+// ---------- Render ----------
+function render() {
+  if (!S.user) { app.innerHTML = viewLogin(); return; }
+  const nCeka = cekajici().length;
+  const nMail = S.rows.filter((r) => r.stav === "objednano").length;
+  app.innerHTML = `
+  <header>
+    <div class="top"><h1>Objednávky MR / CT</h1><button class="who" data-act="odhlasit">Odhlásit</button></div>
+    <nav>
+      <button class="${S.tab === "fronta" ? "on" : ""}" data-act="tab" data-v="fronta">Fronta<span class="n">${nCeka}</span></button>
+      <button class="${S.tab === "hovor" ? "on" : ""}" data-act="tab" data-v="hovor">Hovor</button>
+      <button class="${S.tab === "terminy" ? "on" : ""}" data-act="tab" data-v="terminy">Termíny${nMail ? `<span class="n">${nMail}</span>` : ""}</button>
+      <button class="${S.tab === "cisla" ? "on" : ""}" data-act="tab" data-v="cisla">Čísla</button>
+    </nav>
+  </header>
+  <main>
+    ${S.msg ? `<div class="${S.msg.t === "err" ? "err" : "okmsg"}">${esc(S.msg.m)}</div>` : ""}
+    ${S.tab === "fronta" ? viewFronta() : S.tab === "hovor" ? viewHovor() : S.tab === "cisla" ? viewCisla() : viewTerminy()}
+  </main>`;
+  const ta = document.getElementById("prepis"); if (ta) ta.value = S.prepis;
+}
+
+function viewLogin() {
+  const reg = S.loginMode === "register";
+  return `<main><div class="card login">
+    <h2>${reg ? "Vytvořit účet" : "Přihlášení"}</h2>
+    ${S.msg ? `<div class="${S.msg.t === "err" ? "err" : "okmsg"}">${esc(S.msg.m)}</div>` : ""}
+    <form data-form="login">
+      <label class="f">E-mail</label><input name="email" type="email" autocomplete="username" required>
+      <label class="f">Heslo</label><input name="heslo" type="password" autocomplete="${reg ? "new-password" : "current-password"}" minlength="8" required>
+      <button class="primary full" ${S.busy ? "disabled" : ""}>${reg ? "Vytvořit účet" : "Přihlásit"}</button>
+    </form>
+    <button class="ghost full" data-act="loginmode">${reg ? "Mám účet – přihlásit" : "První spuštění – vytvořit účet"}</button>
+  </div></main>`;
+}
+
+function viewFronta() {
+  const sekce = (typ) => {
+    const list = cekajici(typ);
+    return `<div class="card">
+      <div class="row between"><h2 style="margin:0">${typ === "MR" ? "MR" : "CT obstřiky"} – čeká ${list.length}</h2>
+        ${list.length ? `<div class="row"><a class="btn" href="${telHref(cislo(typ))}">📞 Volat</a>
+        <button class="primary" data-act="nahovor" data-v="${typ}">Zpracovat hovor</button></div>` : ""}</div>
+      <div style="margin-top:6px">${list.length ? list.map(itemFronta).join("") : `<div class="empty">Nikdo nečeká.</div>`}</div>
+    </div>`;
+  };
+  return `
+  <div class="card">
+    <h2>Přidat pacienta</h2>
+    <form data-form="pridat" autocomplete="off">
+      <div class="grid2 resp">
+        <input name="jmeno" placeholder="Jméno (příjmení)" required>
+        <input name="email" type="email" placeholder="E-mail (nepovinné)" inputmode="email">
+      </div>
+      <div class="chips">${RYCHLE.map((v) => `<button type="button" class="chip" data-act="rychly" data-v="${esc(v)}">${esc(v.trim())}</button>`).join("")}</div>
+      <input name="vykon" id="vykon" placeholder="Výkon – např. MR Lp, PRT C6 vpravo" required>
+      <input name="poznamka" placeholder="Poznámka (nepovinné)" style="margin-top:8px">
+      <button class="primary full">Přidat do fronty</button>
+    </form>
+  </div>
+  ${sekce("MR")}${sekce("CT")}`;
+}
+
+function itemFronta(r) {
+  if (S.editId === r.id) {
+    return `<form class="item" data-form="upravit" data-id="${r.id}" style="display:block">
+      <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"></div>
+      <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
+      <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
+      <span class="grow"></span><button type="button" class="ghost" data-act="smazat" data-id="${r.id}">Smazat</button></div>
+    </form>`;
+  }
+  return `<div class="item">
+    <div class="grow"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span><br>
+      <small>${r.email ? esc(r.email) : "bez e-mailu"}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
+    <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
+  </div>`;
+}
+
+function viewHovor() {
+  const list = cekajici(S.hovorTyp);
+  if (!S.vybrano) S.vybrano = new Set(list.map((r) => r.id));
+  return `
+  <div class="card">
+    <div class="seg"><button class="${S.hovorTyp === "MR" ? "on" : ""}" data-act="hovortyp" data-v="MR">MR</button>
+      <button class="${S.hovorTyp === "CT" ? "on" : ""}" data-act="hovortyp" data-v="CT">CT obstřiky</button></div>
+    <label class="f" style="margin-top:12px">Pacienti objednávaní v tomto hovoru</label>
+    ${list.length ? list.map((r) => `<label class="chk"><input type="checkbox" data-sel="${r.id}" ${S.vybrano.has(r.id) ? "checked" : ""}>
+      <span><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span></span></label>`).join("") : `<div class="empty">Ve frontě nikdo není – termíny se uloží jako noví pacienti.</div>`}
+    <a class="btn full" href="${telHref(cislo(S.hovorTyp))}">📞 Zavolat recepci ${S.hovorTyp} (${esc(cislo(S.hovorTyp))})</a>
+    ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).length ? `<details><summary>Jiné číslo</summary>
+      ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).map((k) => `<a class="btn full" href="${telHref(k.telefon)}">📞 ${esc(k.nazev)} (${esc(k.telefon)})</a>`).join("")}
+    </details>` : ""}
+    <label class="f" style="margin-top:14px">Přepis hovoru (Soniox → Kopírovat → sem)</label>
+    <textarea id="prepis" placeholder="Sem vložte přepis hovoru…"></textarea>
+    <div class="grid2" style="margin-top:8px">
+      <button data-act="schranka">Vložit ze schránky</button>
+      <button class="primary" data-act="vytahni" ${S.busy ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
+    </div>
+  </div>
+  ${S.vysledek ? viewVysledek() : ""}`;
+}
+
+function viewVysledek() {
+  const v = S.vysledek;
+  const fronta = cekajici();
+  const nazev = (id) => fronta.find((r) => r.id === id)?.jmeno || "?";
+  const karty = v.terminy.map((t, i) => {
+    const w = [...(t.upozorneni ? [t.upozorneni] : []), ...varovani(t.datum, t.cas)];
+    return `<div class="card">
+      <div class="row between"><h2 style="margin:0">${esc(t.fronta_id ? nazev(t.fronta_id) : t.jmeno || "Nový pacient")}</h2>
+        <label class="chk"><input type="checkbox" data-i="${i}" data-k="ulozit" ${t.ulozit ? "checked" : ""}> uložit</label></div>
+      <label class="f">Pacient</label>
+      <select data-i="${i}" data-k="fronta_id">
+        ${fronta.map((r) => `<option value="${r.id}" ${t.fronta_id === r.id ? "selected" : ""}>${esc(r.jmeno)} – ${esc(r.vykon)}</option>`).join("")}
+        <option value="" ${!t.fronta_id ? "selected" : ""}>— nový pacient (není ve frontě) —</option>
+      </select>
+      ${!t.fronta_id ? `<div class="grid2 resp" style="margin-top:8px"><input data-i="${i}" data-k="jmeno" value="${esc(t.jmeno)}" placeholder="Jméno">
+        <input data-i="${i}" data-k="email" value="${esc(t.email)}" placeholder="E-mail" type="email"></div>` : ""}
+      <label class="f">Výkon</label><input data-i="${i}" data-k="vykon" value="${esc(t.vykon)}">
+      <div class="grid2"><div><label class="f">Datum</label><input type="date" data-i="${i}" data-k="datum" value="${esc(t.datum)}"></div>
+        <div><label class="f">Čas</label><input type="time" data-i="${i}" data-k="cas" value="${esc(t.cas)}"></div></div>
+      <label class="f">Místo</label>
+      <select data-i="${i}" data-k="misto">
+        <option value="" ${!t.misto ? "selected" : ""}>— vyberte —</option>
+        ${Object.keys(MISTA).map((k) => `<option value="${k}" ${t.misto === k ? "selected" : ""}>${MISTA_KRATCE[k]}</option>`).join("")}
+        <option value="jine" ${t.misto === "jine" ? "selected" : ""}>jiné…</option>
+      </select>
+      ${t.misto === "jine" ? `<input data-i="${i}" data-k="misto_text" value="${esc(t.misto_text)}" placeholder="Celé místo, jak má být v mailu" style="margin-top:8px">` : ""}
+      ${w.length ? `<div class="warn">⚠︎ ${w.map(esc).join("<br>⚠︎ ")}</div>` : ""}
+      ${t.citace ? `<div class="quote">„${esc(t.citace)}“</div>` : ""}
+    </div>`;
+  }).join("");
+  const neobj = (v.neobjednani || []).filter((n) => fronta.some((r) => r.id === n.fronta_id));
+  return `
+  <h3>Nalezené termíny (${v.terminy.length}) – zkontrolujte</h3>
+  ${karty || `<div class="card empty">V přepisu jsem nenašel žádný termín.</div>`}
+  ${neobj.length ? `<div class="card"><h2>Neobjednáni – zůstávají ve frontě</h2>${neobj.map((n) =>
+    `<div class="item"><div class="grow"><b>${esc(nazev(n.fronta_id))}</b><br><small>${esc(n.duvod)}</small></div></div>`).join("")}</div>` : ""}
+  ${v.terminy.length ? `<button class="ok full" data-act="potvrdit" ${S.busy ? "disabled" : ""}>Potvrdit a uložit</button>` : ""}
+  <button class="ghost full" data-act="zahodit">Zahodit výsledek</button>`;
+}
+
+function viewTerminy() {
+  // K odeslání mailu – seskupeno podle pacienta
+  const k = S.rows.filter((r) => r.stav === "objednano" && r.termin_datum);
+  const skupiny = new Map();
+  for (const r of k) {
+    const key = r.email ? "e:" + r.email.toLowerCase() : "j:" + r.jmeno.toLowerCase().trim();
+    if (!skupiny.has(key)) skupiny.set(key, []);
+    skupiny.get(key).push(r);
+  }
+  const dnes = dnesISO();
+  const karty = [...skupiny.values()].map((rows) => {
+    rows.sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
+    const email = rows.find((r) => r.email)?.email || "";
+    const { predmet, telo } = sestavMail(rows);
+    const ids = rows.map((r) => r.id).join(",");
+    return `<div class="card">
+      <div class="row between"><h2 style="margin:0">${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</h2></div>
+      <ul class="terms">${rows.map((r) => `<li><span class="tag">${esc(r.vykon)}</span>
+        <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}</span>
+        <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></li>`).join("")}</ul>
+      <label class="f">E-mail pacienta</label>
+      <input type="email" data-email-ids="${ids}" value="${esc(email)}" placeholder="doplňte e-mail" inputmode="email">
+      <details><summary>Náhled mailu</summary><pre class="mail"><b>${esc(predmet)}</b>\n\n${esc(telo)}</pre></details>
+      <div class="grid2" style="margin-top:10px">
+        <a class="btn primary" href="${esc(isIOS() ? gmailApp(email, predmet, telo) : gmailWeb(email, predmet, telo))}" ${isIOS() ? "" : 'target="_blank" rel="noopener"'} data-act="gmail">✉︎ Otevřít v Gmailu</a>
+        <button class="ok" data-act="odeslano" data-ids="${ids}">✓ Odesláno</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="ghost" data-act="kopirovat" data-ids="${ids}">Kopírovat text</button>
+        ${isIOS() ? `<a class="btn ghost" href="${esc(gmailWeb(email, predmet, telo))}" target="_blank" rel="noopener">Gmail na webu</a>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+
+  const odeslane = S.rows.filter((r) => r.stav === "mail_odeslan" && r.termin_datum)
+    .sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
+  const budouci = odeslane.filter((r) => r.termin_datum >= dnes);
+  const probehle = odeslane.filter((r) => r.termin_datum < dnes).reverse();
+  const radek = (r) => `<div class="item"><div class="grow">
+      <b>${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)}</b> · ${esc(r.jmeno)} <span class="tag">${esc(r.vykon)}</span><br>
+      <small>${esc(mistoKratce(r.misto))}${r.email ? " · " + esc(r.email) : ""}</small></div>
+      <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></div>`;
+
+  return `
+  <h3>K odeslání mailu (${skupiny.size})</h3>
+  ${karty || `<div class="card empty">Všechny maily jsou odeslané.</div>`}
+  <h3>Nadcházející termíny (${budouci.length})</h3>
+  <div class="card">${budouci.length ? budouci.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>
+  <button class="ghost full" data-act="stare">${S.showOld ? "Skrýt proběhlé" : `Zobrazit proběhlé (${probehle.length})`}</button>
+  ${S.showOld ? `<div class="card">${probehle.length ? probehle.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>` : ""}`;
+}
+
+function viewCisla() {
+  const typSel = (v) => `<select name="typ">
+      <option value="" ${!v ? "selected" : ""}>— jen k volání —</option>
+      <option value="MR" ${v === "MR" ? "selected" : ""}>Recepce pro MR</option>
+      <option value="CT" ${v === "CT" ? "selected" : ""}>Recepce pro CT obstřiky</option></select>`;
+  const radek = (k) => S.editKontakt === k.id ? `
+    <form class="item" data-form="kontakt" data-id="${k.id}" style="display:block">
+      <div class="grid2 resp"><input name="nazev" value="${esc(k.nazev)}" required><input name="telefon" value="${esc(k.telefon)}" inputmode="tel" required></div>
+      <div style="margin-top:8px">${typSel(k.typ)}</div>
+      <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="kontaktzpet">Zpět</button>
+        <span class="grow"></span><button type="button" class="ghost" data-act="kontaktsmazat" data-id="${k.id}">Smazat</button></div>
+    </form>` : `
+    <div class="item"><div class="grow"><b>${esc(k.nazev)}</b> ${k.typ ? `<span class="tag">${k.typ}</span>` : ""}<br><small>${esc(k.telefon)}</small></div>
+      <a class="btn" href="${telHref(k.telefon)}">📞</a>
+      <button class="ghost" data-act="kontaktedit" data-id="${k.id}" aria-label="Upravit">✎</button></div>`;
+  return `
+  <div class="card"><h2>Telefonní čísla</h2>
+    ${S.kontakty.length ? S.kontakty.map(radek).join("") : `<div class="empty">Zatím žádná čísla.</div>`}
+  </div>
+  <div class="card"><h2>Přidat číslo</h2>
+    <form data-form="kontakt" autocomplete="off">
+      <div class="grid2 resp"><input name="nazev" placeholder="Název – např. Neurologie ambulance" required>
+        <input name="telefon" placeholder="Telefon" inputmode="tel" required></div>
+      <div style="margin-top:8px">${typSel("")}</div>
+      <button class="primary full">Přidat</button>
+    </form>
+    <p class="muted" style="margin:10px 0 0">Číslo označené jako „Recepce pro MR / CT“ se použije u tlačítek Volat. Telefon pro pacienty v mailu zůstává podle šablony.</p>
+  </div>`;
+}
+
+// ---------- Akce ----------
+app.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target; const fd = Object.fromEntries(new FormData(f));
+  const kind = f.dataset.form;
+  S.msg = null;
+  if (kind === "login") {
+    S.busy = true; render();
+    const email = fd.email.trim(), password = fd.heslo;
+    if (S.loginMode === "register") {
+      const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } });
+      S.busy = false;
+      S.msg = error ? { t: "err", m: error.message } : { t: "ok", m: "Účet vytvořen. Potvrďte e-mail odkazem ve schránce a pak se přihlaste." };
+      if (!error) S.loginMode = "login";
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      S.busy = false;
+      if (error) S.msg = { t: "err", m: error.message === "Invalid login credentials" ? "Špatný e-mail nebo heslo." : error.message };
+    }
+    render(); return;
+  }
+  if (kind === "pridat") {
+    const vykon = fd.vykon.trim();
+    const row = { jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
+    const { error } = await sb.from("objednavky").insert(row);
+    if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
+    await nacti(); S.vybrano = null; render(); toast("Přidáno do fronty");
+    document.querySelector('input[name="jmeno"]')?.focus();
+    return;
+  }
+  if (kind === "kontakt") {
+    const zaznam = { nazev: fd.nazev.trim(), telefon: fd.telefon.trim(), typ: fd.typ || null };
+    if (zaznam.typ) {
+      // jedno číslo na typ – ostatním typ odebrat
+      const q = sb.from("kontakty").update({ typ: null }).eq("typ", zaznam.typ);
+      await (f.dataset.id ? q.neq("id", f.dataset.id) : q);
+    }
+    const res = f.dataset.id
+      ? await sb.from("kontakty").update(zaznam).eq("id", f.dataset.id)
+      : await sb.from("kontakty").insert({ ...zaznam, poradi: zaznam.typ ? 1 : 100 });
+    if (res.error) S.msg = { t: "err", m: res.error.message };
+    S.editKontakt = null; await nactiKontakty(); render(); toast("Uloženo"); return;
+  }
+  if (kind === "upravit") {
+    const vykon = fd.vykon.trim();
+    const { error } = await sb.from("objednavky").update({
+      jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
+    }).eq("id", f.dataset.id);
+    if (error) S.msg = { t: "err", m: error.message };
+    S.editId = null; await nacti(); S.vybrano = null; render(); return;
+  }
+});
+
+app.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act;
+  if (act === "gmail") return; // nechat odkaz otevřít
+  e.preventDefault();
+  if (act === "tab") { S.tab = b.dataset.v; S.msg = null; render(); window.scrollTo(0, 0); return; }
+  if (act === "loginmode") { S.loginMode = S.loginMode === "login" ? "register" : "login"; S.msg = null; render(); return; }
+  if (act === "odhlasit") { await sb.auth.signOut(); return; }
+  if (act === "rychly") { const i = document.getElementById("vykon"); i.value = b.dataset.v; i.focus(); i.setSelectionRange(i.value.length, i.value.length); return; }
+  if (act === "edit") { S.editId = b.dataset.id; render(); return; }
+  if (act === "zrusedit") { S.editId = null; render(); return; }
+  if (act === "smazat") {
+    if (!confirm("Smazat pacienta z fronty?")) return;
+    await sb.from("objednavky").delete().eq("id", b.dataset.id);
+    S.editId = null; await nacti(); S.vybrano = null; render(); return;
+  }
+  if (act === "nahovor") { S.tab = "hovor"; S.hovorTyp = b.dataset.v; S.vybrano = null; render(); window.scrollTo(0, 0); return; }
+  if (act === "hovortyp") { S.hovorTyp = b.dataset.v; S.vybrano = null; render(); return; }
+  if (act === "schranka") {
+    try { const t = await navigator.clipboard.readText(); S.prepis = t; document.getElementById("prepis").value = t; toast("Vloženo"); }
+    catch { toast("Schránku nejde přečíst – vložte ručně"); }
+    return;
+  }
+  if (act === "vytahni") return vytahni();
+  if (act === "zahodit") { S.vysledek = null; render(); return; }
+  if (act === "potvrdit") return potvrdit();
+  if (act === "kopirovat") {
+    const rows = S.rows.filter((r) => b.dataset.ids.split(",").includes(r.id));
+    const { predmet, telo } = sestavMail(rows);
+    try { await navigator.clipboard.writeText(`${predmet}\n\n${telo}`); toast("Zkopírováno"); } catch { toast("Kopírování selhalo"); }
+    return;
+  }
+  if (act === "odeslano") {
+    const ids = b.dataset.ids.split(",");
+    const { error } = await sb.from("objednavky").update({ stav: "mail_odeslan", mail_odeslan_at: new Date().toISOString() }).in("id", ids);
+    if (error) S.msg = { t: "err", m: error.message };
+    await nacti(); render(); toast("Označeno jako odeslané"); return;
+  }
+  if (act === "zrusit") {
+    if (!confirm("Zrušit tento termín? (zůstane jen v databázi jako zrušený)")) return;
+    await sb.from("objednavky").update({ stav: "zruseno" }).eq("id", b.dataset.id);
+    await nacti(); render(); return;
+  }
+  if (act === "stare") { S.showOld = !S.showOld; render(); return; }
+  if (act === "kontaktedit") { S.editKontakt = b.dataset.id; render(); return; }
+  if (act === "kontaktzpet") { S.editKontakt = null; render(); return; }
+  if (act === "kontaktsmazat") {
+    if (!confirm("Smazat toto číslo?")) return;
+    await sb.from("kontakty").delete().eq("id", b.dataset.id);
+    S.editKontakt = null; await nactiKontakty(); render(); return;
+  }
+});
+
+app.addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.id === "prepis") { S.prepis = t.value; return; }
+  if (t.dataset.i !== undefined && t.type !== "checkbox" && t.tagName !== "SELECT") {
+    S.vysledek.terminy[+t.dataset.i][t.dataset.k] = t.value;
+  }
+});
+
+app.addEventListener("change", async (e) => {
+  const t = e.target;
+  if (t.dataset.sel) { t.checked ? S.vybrano.add(t.dataset.sel) : S.vybrano.delete(t.dataset.sel); return; }
+  if (t.dataset.i !== undefined) {
+    const item = S.vysledek.terminy[+t.dataset.i];
+    if (t.type === "checkbox") { item[t.dataset.k] = t.checked; return; }
+    item[t.dataset.k] = t.value || null;
+    if (t.tagName === "SELECT" || t.dataset.k === "datum" || t.dataset.k === "cas") render();
+    return;
+  }
+  if (t.dataset.emailIds) {
+    const email = t.value.trim() || null;
+    const { error } = await sb.from("objednavky").update({ email }).in("id", t.dataset.emailIds.split(","));
+    if (error) { S.msg = { t: "err", m: error.message }; }
+    await nacti(); render(); toast("E-mail uložen"); return;
+  }
+});
+
+async function vytahni() {
+  const prepis = (document.getElementById("prepis")?.value || "").trim();
+  S.prepis = prepis;
+  if (prepis.length < 10) { toast("Nejdřív vložte přepis"); return; }
+  const fronta = cekajici(S.hovorTyp).filter((r) => S.vybrano.has(r.id)).map((r) => ({ id: r.id, jmeno: r.jmeno, vykon: r.vykon }));
+  S.busy = true; S.msg = null; S.vysledek = null; render();
+  const { data, error } = await sb.functions.invoke("vytahni-terminy", { body: { prepis, typ: S.hovorTyp, dnes: dnesISO(), fronta } });
+  S.busy = false;
+  if (error) {
+    let m = error.message;
+    try { const j = await error.context.json(); if (j.error) m = j.error; } catch {}
+    S.msg = { t: "err", m: "Zpracování selhalo: " + m }; render(); return;
+  }
+  const platneId = new Set(cekajici().map((r) => r.id));
+  S.vysledek = {
+    terminy: (data.terminy || []).map((t) => {
+      const fr = t.fronta_id && platneId.has(t.fronta_id) ? t.fronta_id : null;
+      const zFronty = S.rows.find((r) => r.id === fr);
+      return { ...t, fronta_id: fr, vykon: t.vykon || zFronty?.vykon || "", email: "", ulozit: true };
+    }),
+    neobjednani: data.neobjednani || [],
+  };
+  render();
+}
+
+async function potvrdit() {
+  const items = S.vysledek.terminy.filter((t) => t.ulozit);
+  for (const t of items) {
+    const kdo = t.fronta_id ? S.rows.find((r) => r.id === t.fronta_id)?.jmeno : t.jmeno;
+    if (!t.fronta_id && !(t.jmeno || "").trim()) { toast("Doplňte jméno nového pacienta"); return; }
+    if (!t.datum || !t.cas) { toast(`Doplňte datum a čas – ${kdo}`); return; }
+    if (!t.misto || (t.misto === "jine" && !(t.misto_text || "").trim())) { toast(`Doplňte místo – ${kdo}`); return; }
+    if (!(t.vykon || "").trim()) { toast(`Doplňte výkon – ${kdo}`); return; }
+  }
+  const ids = items.filter((t) => t.fronta_id).map((t) => t.fronta_id);
+  if (new Set(ids).size !== ids.length) { toast("Jeden pacient je přiřazen dvakrát"); return; }
+  S.busy = true; render();
+  const now = new Date().toISOString();
+  for (const t of items) {
+    const misto = t.misto === "jine" ? t.misto_text.trim() : MISTA[t.misto];
+    const vykon = t.vykon.trim();
+    const zaznam = { stav: "objednano", termin_datum: t.datum, termin_cas: t.cas, misto, vykon, typ: typZVykonu(vykon), objednano_at: now };
+    const res = t.fronta_id
+      ? await sb.from("objednavky").update(zaznam).eq("id", t.fronta_id)
+      : await sb.from("objednavky").insert({ ...zaznam, jmeno: t.jmeno.trim(), email: (t.email || "").trim() || null });
+    if (res.error) { S.busy = false; S.msg = { t: "err", m: "Uložení selhalo: " + res.error.message }; await nacti(); render(); return; }
+  }
+  S.busy = false; S.vysledek = null; S.prepis = ""; S.vybrano = null;
+  await nacti(); S.tab = "terminy"; S.msg = { t: "ok", m: `Uloženo ${items.length} termínů. Teď otevřete maily a odešlete je.` };
+  render(); window.scrollTo(0, 0);
+}
+
+// ---------- Start ----------
+sb.auth.onAuthStateChange(async (_ev, session) => {
+  const u = session?.user || null;
+  if (u?.id === S.user?.id) return;
+  S.user = u;
+  if (u) { await nacti(); }
+  else { S.rows = []; }
+  render();
+});
+const { data: { session } } = await sb.auth.getSession();
+S.user = session?.user || null;
+if (S.user) await nacti();
+render();
+</script>
+</body>
+</html>
