@@ -115,6 +115,8 @@ const MISTA = {
 };
 const MISTA_KRATCE = { "2p": "2. patro", "gama": "Gama", "4p": "4. patro" };
 const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT "];
+// Konverzace v Claude, kde se diktuje hovor (stále stejná, ať nevznikají nové)
+const CLAUDE_CHAT = "https://claude.ai/chat/16b5c444-abb4-4901-ab2f-ba9c950255c0";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const app = document.getElementById("app");
@@ -206,7 +208,7 @@ const cekajici = (typ) => S.rows.filter((r) => r.stav === "ceka" && (!typ || r.t
 function render() {
   if (!S.user) { app.innerHTML = viewLogin(); return; }
   const nCeka = cekajici().length;
-  const nMail = S.rows.filter((r) => r.stav === "objednano").length;
+  const nMail = S.rows.filter((r) => r.stav === "objednano" || r.stav === "koncept").length;
   app.innerHTML = `
   <header>
     <div class="top"><h1>Objednávky MR / CT</h1><button class="who" data-act="odhlasit">Odhlásit</button></div>
@@ -374,8 +376,9 @@ function viewHovor() {
     </details>` : ""}
     ${S.nahrava
       ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit a zpracovat <span class="dot"></span> <span id="rectime">0:00</span></button>`
-      : `<button class="primary full big" data-act="vlozitzpracovat" ${S.busy ? "disabled" : ""}>📋 Vložit přepis a zpracovat</button>`}
-    <small>Během hovoru diktujte v aplikaci Claude, po hovoru text zkopírujte a klepněte sem.</small>
+      : `<a class="btn full big" href="${CLAUDE_CHAT}" target="_blank" rel="noopener">🎙 Diktovat hovor v Claude</a>
+         <small>Otevře konverzaci „Maily MR Vasmedic“. Zapněte diktování, po hovoru text zkopírujte a vraťte se sem.</small>
+         <button class="primary full big" data-act="vlozitzpracovat" ${S.busy ? "disabled" : ""}>📋 Vložit přepis, vytáhnout termíny</button>`}
     ${S.nahrava ? "" : `<details><summary>Nahrávat přímo v této aplikaci</summary>
       <button class="full" data-act="nahravat" style="margin-top:8px">🎙 Nahrávat hovor</button>
       <small>Přepis: <b>${motor() === "soniox" ? "Soniox (placený, přesnější)" : "iPhone / prohlížeč (zdarma)"}</b> · <a href="#" data-act="motor">přepnout</a></small>
@@ -426,58 +429,126 @@ function viewVysledek() {
   ${karty || `<div class="card empty">V přepisu jsem nenašel žádný termín.</div>`}
   ${neobj.length ? `<div class="card"><h2>Neobjednáni – zůstávají ve frontě</h2>${neobj.map((n) =>
     `<div class="item"><div class="grow"><b>${esc(nazev(n.fronta_id))}</b><br><small>${esc(n.duvod)}</small></div></div>`).join("")}</div>` : ""}
-  ${v.terminy.length ? `<button class="ok full" data-act="potvrdit" ${S.busy ? "disabled" : ""}>Potvrdit a uložit</button>` : ""}
+  ${v.terminy.length ? `<button class="ok full" data-act="potvrdit" ${S.busy ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Ukládám a připravuji koncepty…` : "✓ Uložit a připravit koncepty v Gmailu"}</button>` : ""}
   <button class="ghost full" data-act="zahodit">Zahodit výsledek</button>`;
 }
 
-function viewTerminy() {
-  // K odeslání mailu – seskupeno podle pacienta
-  const k = S.rows.filter((r) => r.stav === "objednano" && r.termin_datum);
-  const skupiny = new Map();
-  for (const r of k) {
-    const key = r.email ? "e:" + r.email.toLowerCase() : "j:" + r.jmeno.toLowerCase().trim();
-    if (!skupiny.has(key)) skupiny.set(key, []);
-    skupiny.get(key).push(r);
+function skupinyPacientu(list) {
+  const m = new Map();
+  for (const r of list) {
+    const key = r.gmail_draft_id ? "d:" + r.gmail_draft_id : r.email ? "e:" + r.email.toLowerCase() : "j:" + r.jmeno.toLowerCase().trim();
+    if (!m.has(key)) m.set(key, []);
+    m.get(key).push(r);
   }
+  return [...m.values()].map((rows) => rows.sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas)));
+}
+const gmailKonceptyUrl = () => (isIOS() ? "googlegmail://" : "https://mail.google.com/mail/u/0/#drafts");
+
+async function volejGmail(body) {
+  const { data, error } = await sb.functions.invoke("gmail", { body });
+  if (error) { let m = error.message; try { const j = await error.context.json(); if (j.error) m = j.error; } catch {} return { error: m }; }
+  return data;
+}
+async function pripravKoncepty(skupiny) {
+  if (!skupiny.length) return { pocet: 0 };
+  const maily = skupiny.map((rows) => {
+    const { predmet, telo } = sestavMail(rows);
+    return { klic: rows.map((r) => r.id).join(","), to: rows.find((r) => r.email)?.email || "", predmet, telo };
+  });
+  const res = await volejGmail({ action: "koncepty", maily });
+  if (res.error) return res;
+  const now = new Date().toISOString();
+  for (const v of res.vysledky || []) {
+    await sb.from("objednavky").update({ stav: "koncept", gmail_draft_id: v.draftId, gmail_message_id: v.messageId, koncept_at: now })
+      .in("id", v.klic.split(","));
+  }
+  await nacti();
+  return { pocet: (res.vysledky || []).length };
+}
+let kontrolaBezi = false;
+async function kontrolaStavu() {
+  const skup = skupinyPacientu(S.rows.filter((r) => r.stav === "koncept" && r.gmail_draft_id));
+  if (!skup.length || kontrolaBezi) return;
+  kontrolaBezi = true;
+  const polozky = skup.map((rows) => ({ draftId: rows[0].gmail_draft_id, to: rows.find((r) => r.email)?.email || "", predmet: sestavMail(rows).predmet }));
+  const res = await volejGmail({ action: "stav", polozky });
+  kontrolaBezi = false;
+  if (res.error) return;
+  let zmena = false;
+  for (const v of res.vysledky || []) {
+    if (v.stav === "odeslano") {
+      await sb.from("objednavky").update({ stav: "mail_odeslan", mail_odeslan_at: new Date().toISOString() }).eq("gmail_draft_id", v.draftId); zmena = true;
+    } else if (v.stav === "smazano") {
+      await sb.from("objednavky").update({ stav: "objednano", gmail_draft_id: null, gmail_message_id: null }).eq("gmail_draft_id", v.draftId); zmena = true;
+    }
+  }
+  S.posledniKontrola = new Date();
+  if (zmena) await nacti();
+  if (S.tab === "terminy") render();
+}
+
+function terminyLi(rows, zrusit = true) {
+  return `<ul class="terms">${rows.map((r) => `<li><span class="tag">${esc(r.vykon)}</span>
+    <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}</span>
+    ${zrusit ? `<button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button>` : ""}</li>`).join("")}</ul>`;
+}
+
+function viewTerminy() {
   const dnes = dnesISO();
-  const karty = [...skupiny.values()].map((rows) => {
-    rows.sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
+  // 1) Bez konceptu
+  const bez = skupinyPacientu(S.rows.filter((r) => r.stav === "objednano" && r.termin_datum));
+  const kartyBez = bez.map((rows) => {
     const email = rows.find((r) => r.email)?.email || "";
     const { predmet, telo } = sestavMail(rows);
     const ids = rows.map((r) => r.id).join(",");
     return `<div class="card">
-      <div class="row between"><h2 style="margin:0">${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</h2></div>
-      <ul class="terms">${rows.map((r) => `<li><span class="tag">${esc(r.vykon)}</span>
-        <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}</span>
-        <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></li>`).join("")}</ul>
+      <h2 style="margin:0">${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</h2>
+      ${terminyLi(rows)}
       ${rows.find((r) => r.telefon) ? `<small>Tel.: <a href="${telHref(rows.find((r) => r.telefon).telefon)}">${esc(rows.find((r) => r.telefon).telefon)}</a></small>` : ""}
       <label class="f">E-mail pacienta</label>
       <input type="email" data-email-ids="${ids}" value="${esc(email)}" placeholder="doplňte e-mail" inputmode="email">
+      ${!email ? `<div class="warn">⚠︎ Bez e-mailu – koncept vznikne bez příjemce.</div>` : ""}
       <details><summary>Náhled mailu</summary><pre class="mail"><b>${esc(predmet)}</b>\n\n${esc(telo)}</pre></details>
       <div class="grid2" style="margin-top:10px">
-        <a class="btn primary" href="${esc(isIOS() ? gmailApp(email, predmet, telo) : gmailWeb(email, predmet, telo))}" ${isIOS() ? "" : 'target="_blank" rel="noopener"'} data-act="gmail">✉︎ Otevřít v Gmailu</a>
-        <button class="ok" data-act="odeslano" data-ids="${ids}">✓ Odesláno</button>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <button class="ghost" data-act="kopirovat" data-ids="${ids}">Kopírovat text</button>
-        ${isIOS() ? `<a class="btn ghost" href="${esc(gmailWeb(email, predmet, telo))}" target="_blank" rel="noopener">Gmail na webu</a>` : ""}
+        <button class="primary" data-act="koncept" data-ids="${ids}">✉︎ Vytvořit koncept</button>
+        <button data-act="odeslano" data-ids="${ids}">✓ Odesláno ručně</button>
       </div>
     </div>`;
   }).join("");
 
+  // 2) Koncept v Gmailu
+  const kon = skupinyPacientu(S.rows.filter((r) => r.stav === "koncept"));
+  const kartyKon = kon.map((rows) => {
+    const email = rows.find((r) => r.email)?.email || "";
+    const ids = rows.map((r) => r.id).join(",");
+    return `<div class="item"><div class="grow">
+        <b>${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</b> <small>${email ? esc(email) : "bez příjemce"}</small>
+        ${terminyLi(rows, false)}</div>
+      <button class="ghost" data-act="odeslano" data-ids="${ids}" title="Označit jako odeslané">✓</button></div>`;
+  }).join("");
+
+  // 3) Odeslané
   const odeslane = S.rows.filter((r) => r.stav === "mail_odeslan" && r.termin_datum)
     .sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
   const budouci = odeslane.filter((r) => r.termin_datum >= dnes);
   const probehle = odeslane.filter((r) => r.termin_datum < dnes).reverse();
   const radek = (r) => `<div class="item"><div class="grow">
       <b>${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)}</b> · ${esc(r.jmeno)} <span class="tag">${esc(r.vykon)}</span><br>
-      <small>${esc(mistoKratce(r.misto))}${r.email ? " · " + esc(r.email) : ""}</small></div>
+      <small>${esc(mistoKratce(r.misto))}${r.email ? " · " + esc(r.email) : ""} · ✓ odesláno</small></div>
       <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></div>`;
+  const cas = S.posledniKontrola ? S.posledniKontrola.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : null;
 
   return `
-  <h3>K odeslání mailu (${skupiny.size})</h3>
-  ${karty || `<div class="card empty">Všechny maily jsou odeslané.</div>`}
-  <h3>Nadcházející termíny (${budouci.length})</h3>
+  ${bez.length ? `<h3>Koncept zatím nevytvořen (${bez.length})</h3>${kartyBez}` : ""}
+  <h3>Koncept v Gmailu – čeká na odeslání (${kon.length})</h3>
+  <div class="card">
+    ${kon.length ? kartyKon : `<div class="empty">Žádné koncepty k odeslání.</div>`}
+    ${kon.length ? `<div class="grid2" style="margin-top:10px">
+      <a class="btn primary" href="${gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Otevřít Gmail</a>
+      <button data-act="kontrola">↻ Zkontrolovat odeslání</button></div>
+      <small>Po odeslání v Gmailu se stav změní sám${cas ? ` · kontrolováno ${cas}` : ""}.</small>` : ""}
+  </div>
+  <h3>Odesláno – nadcházející termíny (${budouci.length})</h3>
   <div class="card">${budouci.length ? budouci.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>
   <button class="ghost full" data-act="stare">${S.showOld ? "Skrýt proběhlé" : `Zobrazit proběhlé (${probehle.length})`}</button>
   ${S.showOld ? `<div class="card">${probehle.length ? probehle.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>` : ""}`;
@@ -571,7 +642,7 @@ app.addEventListener("click", async (e) => {
   const act = b.dataset.act;
   if (act === "gmail") return; // nechat odkaz otevřít
   e.preventDefault();
-  if (act === "tab") { S.tab = b.dataset.v; S.msg = null; render(); window.scrollTo(0, 0); return; }
+  if (act === "tab") { S.tab = b.dataset.v; S.msg = null; render(); window.scrollTo(0, 0); if (S.tab === "terminy") kontrolaStavu(); return; }
   if (act === "loginmode") { S.loginMode = S.loginMode === "login" ? "register" : "login"; S.msg = null; render(); return; }
   if (act === "odhlasit") { await sb.auth.signOut(); return; }
   if (act === "rychly") { const i = document.getElementById("vykon"); i.value = b.dataset.v; i.focus(); i.setSelectionRange(i.value.length, i.value.length); return; }
@@ -624,6 +695,14 @@ app.addEventListener("click", async (e) => {
     await nacti(); render(); return;
   }
   if (act === "stare") { S.showOld = !S.showOld; render(); return; }
+  if (act === "kontrola") { b.disabled = true; b.textContent = "Kontroluji…"; await kontrolaStavu(); render(); return; }
+  if (act === "koncept") {
+    b.disabled = true; b.textContent = "Vytvářím…";
+    const rows = S.rows.filter((r) => b.dataset.ids.split(",").includes(r.id));
+    const res = await pripravKoncepty([rows]);
+    S.msg = res.error ? { t: "err", m: "Koncept se nepodařilo vytvořit: " + res.error } : null;
+    render(); if (!res.error) toast("Koncept je v Gmailu"); return;
+  }
   if (act === "zpravyzrusit") { S.zpravy = null; render(); return; }
   if (act === "zpravypridat") {
     const vyber = S.zpravy.polozky.filter((p) => p.pridat);
@@ -838,8 +917,13 @@ async function potvrdit() {
       : await sb.from("objednavky").insert({ ...zaznam, jmeno: t.jmeno.trim(), email: (t.email || "").trim() || null });
     if (res.error) { S.busy = false; S.msg = { t: "err", m: "Uložení selhalo: " + res.error.message }; await nacti(); render(); return; }
   }
-  S.busy = false; S.vysledek = null; S.prepis = ""; S.vybrano = null;
-  await nacti(); S.tab = "terminy"; S.msg = { t: "ok", m: `Uloženo ${items.length} termínů. Teď otevřete maily a odešlete je.` };
+  S.vysledek = null; S.prepis = ""; S.vybrano = null;
+  await nacti();
+  const r = await pripravKoncepty(skupinyPacientu(S.rows.filter((x) => x.stav === "objednano" && x.termin_datum)));
+  S.busy = false; S.tab = "terminy";
+  S.msg = r.error
+    ? { t: "err", m: `Uloženo ${items.length} termínů, ale koncepty se nepodařilo vytvořit: ${r.error}` }
+    : { t: "ok", m: `Uloženo ${items.length} termínů, v Gmailu připraveno ${r.pocet} konceptů. Zkontrolujte je a odešlete.` };
   render(); window.scrollTo(0, 0);
 }
 
@@ -856,6 +940,7 @@ const { data: { session } } = await sb.auth.getSession();
 S.user = session?.user || null;
 if (S.user) await nacti();
 render();
+if (S.user) kontrolaStavu();
 </script>
 </body>
 </html>
