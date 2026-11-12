@@ -283,6 +283,7 @@ function itemFronta(r) {
     <div class="grow"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span><br>
       <small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
+    <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
   </div>`;
 }
 
@@ -650,7 +651,8 @@ app.addEventListener("click", async (e) => {
   if (act === "edit") { S.editId = b.dataset.id; render(); return; }
   if (act === "zrusedit") { S.editId = null; render(); return; }
   if (act === "smazat") {
-    if (!confirm("Smazat pacienta z fronty?")) return;
+    const kdo = S.rows.find((r) => r.id === b.dataset.id);
+    if (!confirm(`Smazat z fronty: ${kdo ? kdo.jmeno + " – " + kdo.vykon : "pacienta"}?`)) return;
     await sb.from("objednavky").delete().eq("id", b.dataset.id);
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
   }
