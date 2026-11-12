@@ -359,21 +359,21 @@ async function nactiZpravy(files) {
 }
 
 function viewHovor() {
-  const list = cekajici(S.hovorTyp);
+  const list = cekajici();
   if (!S.vybrano) S.vybrano = new Set(list.map((r) => r.id));
+  const nMR = list.filter((r) => r.typ === "MR").length, nCT = list.length - nMR;
+  const nVyb = list.filter((r) => S.vybrano.has(r.id)).length;
   return `
   <div class="card">
-    <div class="seg"><button class="${S.hovorTyp === "MR" ? "on" : ""}" data-act="hovortyp" data-v="MR">MR</button>
-      <button class="${S.hovorTyp === "CT" ? "on" : ""}" data-act="hovortyp" data-v="CT">CT obstřiky</button></div>
-    <label class="f" style="margin-top:12px">Pacienti objednávaní v tomto hovoru</label>
-    ${list.length ? list.map((r) => `<label class="chk"><input type="checkbox" data-sel="${r.id}" ${S.vybrano.has(r.id) ? "checked" : ""}>
-      <span><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span></span></label>`).join("") : `<div class="empty">Ve frontě nikdo není – termíny se uloží jako noví pacienti.</div>`}
-    <div class="row between" style="margin-top:14px">
-      <div><small>Vytočte na pevné lince (hlasitý odposlech)</small><br><a class="cislo" href="${telHref(cislo(S.hovorTyp))}">${esc(cislo(S.hovorTyp))}</a></div>
+    <div class="row between"><h2 style="margin:0">Čeká na objednání: ${list.length}</h2><small>MR ${nMR} · CT ${nCT}</small></div>
+    ${list.length ? `<details><summary>Kdo se objednává (${nVyb} vybráno)</summary>
+      ${list.map((r) => `<label class="chk"><input type="checkbox" data-sel="${r.id}" ${S.vybrano.has(r.id) ? "checked" : ""}>
+        <span><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span></span></label>`).join("")}
+    </details>` : `<div class="empty">Ve frontě nikdo není – termíny se uloží jako noví pacienti.</div>`}
+    <div class="grid2" style="margin-top:12px">
+      <div><small>Recepce MR</small><br><a class="cislo" href="${telHref(cislo("MR"))}">${esc(cislo("MR"))}</a></div>
+      <div><small>Recepce CT</small><br><a class="cislo" href="${telHref(cislo("CT"))}">${esc(cislo("CT"))}</a></div>
     </div>
-    ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).length ? `<details><summary>Jiné číslo</summary>
-      ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).map((k) => `<div class="item"><div class="grow">${esc(k.nazev)}</div><a href="${telHref(k.telefon)}"><b>${esc(k.telefon)}</b></a></div>`).join("")}
-    </details>` : ""}
     ${S.nahrava
       ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit nahrávání <span class="dot"></span> <span id="rectime">0:00</span></button>`
       : `<label class="f" style="margin-top:14px">1. Během hovoru</label>
@@ -383,7 +383,7 @@ function viewHovor() {
       <label class="f" style="margin:0">2. Přepis hovoru</label>
       <button class="ghost" data-act="schranka" ${S.nahrava ? "disabled" : ""}>📋 Vložit ze schránky</button>
     </div>
-    <textarea id="prepis" placeholder="Sem vložte zkopírovaný přepis…" style="margin-top:6px"></textarea>
+    <textarea id="prepis" placeholder="Sem vložte zkopírovaný přepis. Další hovor se připojí pod něj…" style="margin-top:6px"></textarea>
     <label class="f" style="margin-top:14px">3. Zpracování</label>
     <button class="primary full big" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
     ${S.nahrava ? "" : `<details style="margin-top:10px"><summary>Jiná možnost: nahrávat přímo v této aplikaci</summary>
@@ -657,7 +657,15 @@ app.addEventListener("click", async (e) => {
   if (act === "nahovor") { S.tab = "hovor"; S.hovorTyp = b.dataset.v; S.vybrano = null; render(); window.scrollTo(0, 0); return; }
   if (act === "hovortyp") { S.hovorTyp = b.dataset.v; S.vybrano = null; render(); return; }
   if (act === "schranka") {
-    try { const t = await navigator.clipboard.readText(); S.prepis = t; document.getElementById("prepis").value = t; toast("Vloženo"); }
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!t) { toast("Schránka je prázdná"); return; }
+      const ta = document.getElementById("prepis");
+      const dosavad = (ta?.value || S.prepis || "").trim();
+      S.prepis = dosavad ? dosavad + "\n\n--- další hovor ---\n\n" + t : t;
+      if (ta) ta.value = S.prepis;
+      toast(dosavad ? "Přidáno jako další hovor" : "Vloženo");
+    }
     catch { toast("Schránku nejde přečíst – vložte ručně"); }
     return;
   }
@@ -835,7 +843,7 @@ async function nahravatStart() {
     const sec = Math.floor((Date.now() - t0) / 1000); el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
   }, 1000);
   const terms = ["magnetická rezonance", "MR", "bederní páteř", "krční páteř", "obstřik", "PRT", "Gama nůž", "Homolka",
-    "operační sály", "neurochirurgie", ...cekajici(S.hovorTyp).map((r) => r.jmeno)];
+    "operační sály", "neurochirurgie", ...cekajici().map((r) => r.jmeno)];
   rec = new SonioxClient({
     apiKey: async () => {
       const { data, error } = await sb.functions.invoke("soniox-klic", { body: {} });
@@ -875,9 +883,9 @@ async function vytahni() {
   const prepis = (document.getElementById("prepis")?.value || "").trim();
   S.prepis = prepis;
   if (prepis.length < 10) { toast("Nejdřív vložte přepis"); return; }
-  const fronta = cekajici(S.hovorTyp).filter((r) => S.vybrano.has(r.id)).map((r) => ({ id: r.id, jmeno: r.jmeno, vykon: r.vykon }));
+  const fronta = cekajici().filter((r) => S.vybrano.has(r.id)).map((r) => ({ id: r.id, jmeno: r.jmeno, vykon: r.vykon }));
   S.busy = true; S.msg = null; S.vysledek = null; render();
-  const { data, error } = await sb.functions.invoke("vytahni-terminy", { body: { prepis, typ: S.hovorTyp, dnes: dnesISO(), fronta } });
+  const { data, error } = await sb.functions.invoke("vytahni-terminy", { body: { prepis, typ: "ALL", dnes: dnesISO(), fronta } });
   S.busy = false;
   if (error) {
     let m = error.message;
@@ -939,7 +947,7 @@ sb.auth.onAuthStateChange(async (_ev, session) => {
 });
 const { data: { session } } = await sb.auth.getSession();
 S.user = session?.user || null;
-if (S.user) await nacti();
+if (S.user) { await nacti(); if (cekajici().length) S.tab = "hovor"; }
 render();
 if (S.user) kontrolaStavu();
 </script>
