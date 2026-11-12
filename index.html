@@ -375,20 +375,21 @@ function viewHovor() {
       ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).map((k) => `<div class="item"><div class="grow">${esc(k.nazev)}</div><a href="${telHref(k.telefon)}"><b>${esc(k.telefon)}</b></a></div>`).join("")}
     </details>` : ""}
     ${S.nahrava
-      ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit a zpracovat <span class="dot"></span> <span id="rectime">0:00</span></button>`
-      : `<a class="btn full big" href="${CLAUDE_CHAT}" target="_blank" rel="noopener">🎙 Diktovat hovor v Claude</a>
-         <small>Otevře konverzaci „Maily MR Vasmedic“. Zapněte diktování, po hovoru text zkopírujte a vraťte se sem.</small>
-         <button class="primary full big" data-act="vlozitzpracovat" ${S.busy ? "disabled" : ""}>📋 Vložit přepis, vytáhnout termíny</button>`}
-    ${S.nahrava ? "" : `<details><summary>Nahrávat přímo v této aplikaci</summary>
-      <button class="full" data-act="nahravat" style="margin-top:8px">🎙 Nahrávat hovor</button>
-      <small>Přepis: <b>${motor() === "soniox" ? "Soniox (placený, přesnější)" : "iPhone / prohlížeč (zdarma)"}</b> · <a href="#" data-act="motor">přepnout</a></small>
-    </details>`}
-    <label class="f" style="margin-top:14px">Přepis hovoru</label>
-    <textarea id="prepis" placeholder="Tady se objeví přepis – nebo ho sem vložte ručně…"></textarea>
-    <div class="grid2" style="margin-top:8px">
-      <button data-act="schranka" ${S.nahrava ? "disabled" : ""}>Vložit ze schránky</button>
-      <button class="primary" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
+      ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit nahrávání <span class="dot"></span> <span id="rectime">0:00</span></button>`
+      : `<label class="f" style="margin-top:14px">1. Během hovoru</label>
+         <a class="btn full" href="${CLAUDE_CHAT}" target="_blank" rel="noopener">🎙 Diktovat hovor v Claude</a>
+         <small>Otevře konverzaci „Maily MR Vasmedic“. Po hovoru text v Claude zkopírujte.</small>`}
+    <div class="row between" style="margin-top:14px">
+      <label class="f" style="margin:0">2. Přepis hovoru</label>
+      <button class="ghost" data-act="schranka" ${S.nahrava ? "disabled" : ""}>📋 Vložit ze schránky</button>
     </div>
+    <textarea id="prepis" placeholder="Sem vložte zkopírovaný přepis…" style="margin-top:6px"></textarea>
+    <label class="f" style="margin-top:14px">3. Zpracování</label>
+    <button class="primary full big" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
+    ${S.nahrava ? "" : `<details style="margin-top:10px"><summary>Jiná možnost: nahrávat přímo v této aplikaci</summary>
+      <button class="full" data-act="nahravat" style="margin-top:8px">🎙 Nahrávat hovor</button>
+      <small>Přepis: <b>${motor() === "soniox" ? "Soniox (placený)" : "iPhone / prohlížeč (zdarma)"}</b> · <a href="#" data-act="motor">přepnout</a></small>
+    </details>`}
   </div>
   ${S.vysledek ? viewVysledek() : ""}`;
 }
