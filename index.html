@@ -82,6 +82,11 @@
   .login { max-width: 380px; margin: 40px auto; }
   .chk { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
   .chk input { width: auto; }
+  .rec { background: #c0262d; border-color: #c0262d; color: #fff; }
+  .big { padding: 16px; font-size: 18px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #fff; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .cislo { font-size: 22px; font-weight: 700; letter-spacing: .03em; }
   .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); transform: translateX(-50%);
     background: #17212b; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 10; }
 </style>
@@ -90,6 +95,7 @@
 <div id="app"></div>
 <script type="module">
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SonioxClient } from "https://esm.sh/@soniox/speech-to-text-web@1.4.0";
 
 // ---------- Nastavení ----------
 const SUPABASE_URL = "https://cjgfarbusdvieempommt.supabase.co";
@@ -360,15 +366,21 @@ function viewHovor() {
     <label class="f" style="margin-top:12px">Pacienti objednávaní v tomto hovoru</label>
     ${list.length ? list.map((r) => `<label class="chk"><input type="checkbox" data-sel="${r.id}" ${S.vybrano.has(r.id) ? "checked" : ""}>
       <span><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span></span></label>`).join("") : `<div class="empty">Ve frontě nikdo není – termíny se uloží jako noví pacienti.</div>`}
-    <a class="btn full" href="${telHref(cislo(S.hovorTyp))}">📞 Zavolat recepci ${S.hovorTyp} (${esc(cislo(S.hovorTyp))})</a>
+    <div class="row between" style="margin-top:14px">
+      <div><small>Vytočte na pevné lince (hlasitý odposlech)</small><br><a class="cislo" href="${telHref(cislo(S.hovorTyp))}">${esc(cislo(S.hovorTyp))}</a></div>
+    </div>
     ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).length ? `<details><summary>Jiné číslo</summary>
-      ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).map((k) => `<a class="btn full" href="${telHref(k.telefon)}">📞 ${esc(k.nazev)} (${esc(k.telefon)})</a>`).join("")}
+      ${S.kontakty.filter((k) => k.typ !== S.hovorTyp).map((k) => `<div class="item"><div class="grow">${esc(k.nazev)}</div><a href="${telHref(k.telefon)}"><b>${esc(k.telefon)}</b></a></div>`).join("")}
     </details>` : ""}
-    <label class="f" style="margin-top:14px">Přepis hovoru (Soniox → Kopírovat → sem)</label>
-    <textarea id="prepis" placeholder="Sem vložte přepis hovoru…"></textarea>
+    ${S.nahrava
+      ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit a zpracovat <span class="dot"></span> <span id="rectime">0:00</span></button>`
+      : `<button class="primary full big" data-act="nahravat" ${S.busy ? "disabled" : ""}>🎙 Nahrávat hovor</button>`}
+    <small>Spusťte nahrávání, pak vytočte číslo. iPhone položte k reproduktoru telefonu. Po ukončení se termíny vytáhnou samy.</small>
+    <label class="f" style="margin-top:14px">Přepis hovoru</label>
+    <textarea id="prepis" placeholder="Tady se objeví přepis – nebo ho sem vložte ručně…"></textarea>
     <div class="grid2" style="margin-top:8px">
-      <button data-act="schranka">Vložit ze schránky</button>
-      <button class="primary" data-act="vytahni" ${S.busy ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
+      <button data-act="schranka" ${S.nahrava ? "disabled" : ""}>Vložit ze schránky</button>
+      <button class="primary" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
     </div>
   </div>
   ${S.vysledek ? viewVysledek() : ""}`;
@@ -574,6 +586,8 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (act === "vytahni") return vytahni();
+  if (act === "nahravat") return nahravatStart();
+  if (act === "nahravatstop") { rec?.stop(); b.disabled = true; b.textContent = "Dokončuji přepis…"; return; }
   if (act === "zahodit") { S.vysledek = null; render(); return; }
   if (act === "potvrdit") return potvrdit();
   if (act === "kopirovat") {
@@ -647,6 +661,66 @@ app.addEventListener("change", async (e) => {
     await nacti(); render(); toast("E-mail uložen"); return;
   }
 });
+
+// ---------- Nahrávání (Soniox) ----------
+let rec = null, wakeLock = null, recTimer = null;
+const R = { final: "", spk: null };
+function prepisZobraz(nonfinal) {
+  S.prepis = (R.final + nonfinal).replace(/^\n+/, "");
+  const ta = document.getElementById("prepis");
+  if (ta) { ta.value = S.prepis; ta.scrollTop = ta.scrollHeight; }
+}
+function nahravatUklid() {
+  clearInterval(recTimer); recTimer = null;
+  try { wakeLock?.release(); } catch {}
+  wakeLock = null; rec = null; S.nahrava = false;
+}
+async function nahravatStart() {
+  if (!SonioxClient.isSupported) { toast("Tento prohlížeč neumí nahrávat"); return; }
+  R.final = S.prepis ? S.prepis.trim() + "\n" : ""; R.spk = null;
+  S.nahrava = true; S.msg = null; S.vysledek = null; render();
+  try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {}
+  const t0 = Date.now();
+  recTimer = setInterval(() => {
+    const el = document.getElementById("rectime"); if (!el) return;
+    const sec = Math.floor((Date.now() - t0) / 1000); el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  }, 1000);
+  const terms = ["magnetická rezonance", "MR", "bederní páteř", "krční páteř", "obstřik", "PRT", "Gama nůž", "Homolka",
+    "operační sály", "neurochirurgie", ...cekajici(S.hovorTyp).map((r) => r.jmeno)];
+  rec = new SonioxClient({
+    apiKey: async () => {
+      const { data, error } = await sb.functions.invoke("soniox-klic", { body: {} });
+      if (error) { let m = error.message; try { const j = await error.context.json(); if (j.error) m = j.error; } catch {} throw new Error(m); }
+      return data.api_key;
+    },
+  });
+  rec.start({
+    model: "stt-rt-v6",
+    languageHints: ["cs"],
+    enableSpeakerDiarization: true,
+    context: { general: [{ key: "domain", value: "Healthcare" }, { key: "topic", value: "Telefonické objednání pacientů na MR a CT obstřiky v nemocnici" }], terms },
+    audioConstraints: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+    onPartialResult(res) {
+      let nonfinal = "";
+      for (const t of res.tokens || []) {
+        if (!t.text || t.text === "<end>") continue;
+        if (t.is_final) {
+          if (t.speaker && t.speaker !== R.spk) { R.final += `\nMluvčí ${t.speaker}: `; R.spk = t.speaker; R.final += t.text.replace(/^\s+/, ""); }
+          else R.final += t.text;
+        } else nonfinal += t.text;
+      }
+      prepisZobraz(nonfinal);
+    },
+    onFinished() {
+      nahravatUklid(); prepisZobraz(""); render();
+      if (S.prepis.trim().length > 20) vytahni(); else toast("Přepis je prázdný");
+    },
+    onError(status, message) {
+      nahravatUklid(); prepisZobraz("");
+      S.msg = { t: "err", m: "Nahrávání selhalo: " + (message || status) }; render();
+    },
+  });
+}
 
 async function vytahni() {
   const prepis = (document.getElementById("prepis")?.value || "").trim();
