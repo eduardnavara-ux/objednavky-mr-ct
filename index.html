@@ -243,12 +243,14 @@ function viewFronta() {
     </div>`;
   };
   return `
+  ${viewZeZpravy()}
   <div class="card">
-    <h2>Přidat pacienta</h2>
+    <h2>Přidat pacienta ručně</h2>
     <form data-form="pridat" autocomplete="off">
-      <div class="grid2 resp">
-        <input name="jmeno" placeholder="Jméno (příjmení)" required>
+      <input name="jmeno" placeholder="Jméno (příjmení)" required>
+      <div class="grid2 resp" style="margin-top:8px">
         <input name="email" type="email" placeholder="E-mail (nepovinné)" inputmode="email">
+        <input name="telefon" placeholder="Telefon (nepovinné)" inputmode="tel">
       </div>
       <div class="chips">${RYCHLE.map((v) => `<button type="button" class="chip" data-act="rychly" data-v="${esc(v)}">${esc(v.trim())}</button>`).join("")}</div>
       <input name="vykon" id="vykon" placeholder="Výkon – např. MR Lp, PRT C6 vpravo" required>
@@ -262,7 +264,8 @@ function viewFronta() {
 function itemFronta(r) {
   if (S.editId === r.id) {
     return `<form class="item" data-form="upravit" data-id="${r.id}" style="display:block">
-      <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"></div>
+      <input name="jmeno" value="${esc(r.jmeno)}" required>
+      <div class="grid2 resp" style="margin-top:8px"><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"><input name="telefon" value="${esc(r.telefon)}" placeholder="Telefon" inputmode="tel"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
       <span class="grow"></span><button type="button" class="ghost" data-act="smazat" data-id="${r.id}">Smazat</button></div>
@@ -270,9 +273,81 @@ function itemFronta(r) {
   }
   return `<div class="item">
     <div class="grow"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span><br>
-      <small>${r.email ? esc(r.email) : "bez e-mailu"}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
+      <small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
   </div>`;
+}
+
+const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+
+function viewZeZpravy() {
+  const z = S.zpravy;
+  let obsah = "";
+  if (z?.busy) obsah = `<div class="okmsg" style="margin:10px 0 0">⏳ Čtu ${z.pocet} ${z.pocet === 1 ? "fotku" : "fotky"}…</div>`;
+  else if (z?.polozky) {
+    obsah = z.polozky.length ? z.polozky.map((p, i) => `
+      <div class="card" style="margin:10px 0 0;background:#fafbfc">
+        <div class="row between"><b>${esc(p.jmeno) || "?"}</b>
+          <label class="chk"><input type="checkbox" data-z="${i}" data-k="pridat" ${p.pridat ? "checked" : ""}> přidat</label></div>
+        <input data-z="${i}" data-k="jmeno" value="${esc(p.jmeno)}" placeholder="Jméno" style="margin-top:6px">
+        <div class="grid2 resp" style="margin-top:8px">
+          <input data-z="${i}" data-k="email" value="${esc(p.email)}" placeholder="E-mail" type="email" inputmode="email">
+          <input data-z="${i}" data-k="telefon" value="${esc(p.telefon)}" placeholder="Telefon" inputmode="tel"></div>
+        <div class="grid2 resp" style="margin-top:8px">
+          <input data-z="${i}" data-k="vykon" value="${esc(p.vykon)}" placeholder="Výkon">
+          <input data-z="${i}" data-k="poznamka" value="${esc(p.poznamka)}" placeholder="Poznámka"></div>
+        ${p.duplicita ? `<div class="warn">⚠︎ Stejný pacient s tímto výkonem už ve frontě čeká.</div>` : ""}
+        ${!p.email ? `<div class="warn">⚠︎ Na zprávě jsem nenašel e-mail.</div>` : ""}
+        ${p.nejiste ? `<div class="warn">⚠︎ ${esc(p.nejiste)}</div>` : ""}
+      </div>`).join("") : `<div class="empty">Na fotkách jsem nenašel žádného pacienta.</div>`;
+    obsah += `<div class="grid2" style="margin-top:10px">
+      <button data-act="zpravyzrusit">Zahodit</button>
+      ${z.polozky.length ? `<button class="ok" data-act="zpravypridat">Přidat do fronty</button>` : ""}</div>`;
+  }
+  return `<div class="card">
+    <div class="row between"><h2 style="margin:0">Ze zprávy</h2>
+      <label class="btn primary" ${z?.busy ? 'style="opacity:.5;pointer-events:none"' : ""}>📷 Vyfotit zprávu
+        <input id="foto" type="file" accept="image/*" multiple hidden></label></div>
+    <small>Vyfoťte hlavičku i doporučení. Můžete vybrat víc fotek a víc pacientů najednou.</small>
+    ${obsah}
+  </div>`;
+}
+
+async function zmensiObrazek(file, max = 2000) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return { media_type: "image/jpeg", data: c.toDataURL("image/jpeg", 0.85).split(",")[1] };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function nactiZpravy(files) {
+  files = [...files].slice(0, 8);
+  if (!files.length) return;
+  S.zpravy = { busy: true, pocet: files.length }; S.msg = null; render();
+  let obrazky;
+  try { obrazky = await Promise.all(files.map((f) => zmensiObrazek(f))); }
+  catch { S.zpravy = null; S.msg = { t: "err", m: "Fotku se nepodařilo načíst." }; render(); return; }
+  const { data, error } = await sb.functions.invoke("nacti-zpravu", { body: { obrazky } });
+  if (error) {
+    let m = error.message;
+    try { const j = await error.context.json(); if (j.error) m = j.error; } catch {}
+    S.zpravy = null; S.msg = { t: "err", m: "Čtení zprávy selhalo: " + m }; render(); return;
+  }
+  const polozky = [];
+  for (const p of data.pacienti || []) {
+    const vykony = p.vykony?.length ? p.vykony : [""];
+    for (const v of vykony) {
+      const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v));
+      polozky.push({ jmeno: p.jmeno || "", email: p.email || "", telefon: p.telefon || "", vykon: v, poznamka: p.poznamka || "",
+        nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita, pridat: !!v && !duplicita });
+    }
+  }
+  S.zpravy = { polozky }; render();
 }
 
 function viewHovor() {
@@ -359,6 +434,7 @@ function viewTerminy() {
       <ul class="terms">${rows.map((r) => `<li><span class="tag">${esc(r.vykon)}</span>
         <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}</span>
         <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></li>`).join("")}</ul>
+      ${rows.find((r) => r.telefon) ? `<small>Tel.: <a href="${telHref(rows.find((r) => r.telefon).telefon)}">${esc(rows.find((r) => r.telefon).telefon)}</a></small>` : ""}
       <label class="f">E-mail pacienta</label>
       <input type="email" data-email-ids="${ids}" value="${esc(email)}" placeholder="doplňte e-mail" inputmode="email">
       <details><summary>Náhled mailu</summary><pre class="mail"><b>${esc(predmet)}</b>\n\n${esc(telo)}</pre></details>
@@ -444,7 +520,7 @@ app.addEventListener("submit", async (e) => {
   }
   if (kind === "pridat") {
     const vykon = fd.vykon.trim();
-    const row = { jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
+    const row = { jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
     const { error } = await sb.from("objednavky").insert(row);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
     await nacti(); S.vybrano = null; render(); toast("Přidáno do fronty");
@@ -467,7 +543,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
+      jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
@@ -518,6 +594,17 @@ app.addEventListener("click", async (e) => {
     await nacti(); render(); return;
   }
   if (act === "stare") { S.showOld = !S.showOld; render(); return; }
+  if (act === "zpravyzrusit") { S.zpravy = null; render(); return; }
+  if (act === "zpravypridat") {
+    const vyber = S.zpravy.polozky.filter((p) => p.pridat);
+    if (!vyber.length) { toast("Nic není vybráno"); return; }
+    if (vyber.some((p) => !p.jmeno.trim() || !p.vykon.trim())) { toast("Doplňte jméno a výkon"); return; }
+    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), email: p.email.trim() || null, telefon: p.telefon.trim() || null,
+      vykon: p.vykon.trim(), typ: typZVykonu(p.vykon), poznamka: p.poznamka.trim() || null }));
+    const { error } = await sb.from("objednavky").insert(rows);
+    if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
+    S.zpravy = null; S.vybrano = null; await nacti(); render(); toast(`Přidáno do fronty: ${rows.length}`); return;
+  }
   if (act === "kontaktedit") { S.editKontakt = b.dataset.id; render(); return; }
   if (act === "kontaktzpet") { S.editKontakt = null; render(); return; }
   if (act === "kontaktsmazat") {
@@ -530,6 +617,7 @@ app.addEventListener("click", async (e) => {
 app.addEventListener("input", (e) => {
   const t = e.target;
   if (t.id === "prepis") { S.prepis = t.value; return; }
+  if (t.dataset.z !== undefined && t.type !== "checkbox") { S.zpravy.polozky[+t.dataset.z][t.dataset.k] = t.value; return; }
   if (t.dataset.i !== undefined && t.type !== "checkbox" && t.tagName !== "SELECT") {
     S.vysledek.terminy[+t.dataset.i][t.dataset.k] = t.value;
   }
@@ -537,6 +625,13 @@ app.addEventListener("input", (e) => {
 
 app.addEventListener("change", async (e) => {
   const t = e.target;
+  if (t.id === "foto") { const files = [...t.files]; t.value = ""; return nactiZpravy(files); }
+  if (t.dataset.z !== undefined) {
+    const p = S.zpravy.polozky[+t.dataset.z];
+    if (t.type === "checkbox") p[t.dataset.k] = t.checked; else p[t.dataset.k] = t.value;
+    if (t.dataset.k === "jmeno") render();
+    return;
+  }
   if (t.dataset.sel) { t.checked ? S.vybrano.add(t.dataset.sel) : S.vybrano.delete(t.dataset.sel); return; }
   if (t.dataset.i !== undefined) {
     const item = S.vysledek.terminy[+t.dataset.i];
