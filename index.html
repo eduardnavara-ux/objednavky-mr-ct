@@ -374,10 +374,12 @@ function viewHovor() {
     </details>` : ""}
     ${S.nahrava
       ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit a zpracovat <span class="dot"></span> <span id="rectime">0:00</span></button>`
-      : `<button class="primary full big" data-act="nahravat" ${S.busy ? "disabled" : ""}>🎙 Nahrávat hovor</button>`}
-    <small>Spusťte nahrávání, pak vytočte číslo. iPhone položte k reproduktoru telefonu. Po ukončení se termíny vytáhnou samy.<br>
-      Přepis: <b>${motor() === "soniox" ? "Soniox (placený, přesnější)" : "iPhone / prohlížeč (zdarma)"}</b> ·
-      <a href="#" data-act="motor">přepnout</a></small>
+      : `<button class="primary full big" data-act="vlozitzpracovat" ${S.busy ? "disabled" : ""}>📋 Vložit přepis a zpracovat</button>`}
+    <small>Během hovoru diktujte v aplikaci Claude, po hovoru text zkopírujte a klepněte sem.</small>
+    ${S.nahrava ? "" : `<details><summary>Nahrávat přímo v této aplikaci</summary>
+      <button class="full" data-act="nahravat" style="margin-top:8px">🎙 Nahrávat hovor</button>
+      <small>Přepis: <b>${motor() === "soniox" ? "Soniox (placený, přesnější)" : "iPhone / prohlížeč (zdarma)"}</b> · <a href="#" data-act="motor">přepnout</a></small>
+    </details>`}
     <label class="f" style="margin-top:14px">Přepis hovoru</label>
     <textarea id="prepis" placeholder="Tady se objeví přepis – nebo ho sem vložte ručně…"></textarea>
     <div class="grid2" style="margin-top:8px">
@@ -588,6 +590,13 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (act === "vytahni") return vytahni();
+  if (act === "vlozitzpracovat") {
+    let t = "";
+    try { t = await navigator.clipboard.readText(); } catch { toast("Schránku nejde přečíst – vložte text do pole ručně"); return; }
+    if (!t || t.trim().length < 10) { toast("Ve schránce není přepis"); return; }
+    S.prepis = t; const ta = document.getElementById("prepis"); if (ta) ta.value = t;
+    return vytahni();
+  }
   if (act === "nahravat") return motor() === "soniox" ? nahravatStart() : diktovatStart();
   if (act === "motor") { try { localStorage.setItem("prepisMotor", motor() === "soniox" ? "apple" : "soniox"); } catch {} render(); return; }
   if (act === "nahravatstop") {
