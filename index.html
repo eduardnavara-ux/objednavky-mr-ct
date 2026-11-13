@@ -405,7 +405,7 @@ function viewHovor() {
     </div>
     <textarea id="prepis" placeholder="Sem vložte zkopírovaný přepis. Další hovor se připojí pod něj…" style="margin-top:6px"></textarea>
     <label class="f" style="margin-top:14px">3. Zpracování</label>
-    <button class="primary full big" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Zpracovávám…` : "Vytáhnout termíny"}</button>
+    <button class="primary full big" data-act="vytahni" ${S.busy || S.nahrava ? "disabled" : ""}>${S.busy ? `<span class="spin"></span> Vytahuji termíny a připravuji maily…` : "Vytáhnout termíny a připravit maily"}</button>
     ${S.nahrava ? "" : `<details style="margin-top:10px"><summary>Jiná možnost: nahrávat přímo v této aplikaci</summary>
       <button class="full" data-act="nahravat" style="margin-top:8px">🎙 Nahrávat hovor</button>
       <small>Přepis: <b>${motor() === "soniox" ? "Soniox (placený)" : "iPhone / prohlížeč (zdarma)"}</b> · <a href="#" data-act="motor">přepnout</a></small>
@@ -1028,10 +1028,21 @@ async function vytahni() {
     }),
     neobjednani: data.neobjednani || [],
   };
+  // Vše jednoznačné (pacient z fronty, datum, čas, místo, výkon) → rovnou uložit a vytvořit koncepty v Gmailu.
+  const t0 = S.vysledek.terminy;
+  const kompletni = t0.length && t0.every((t) => t.fronta_id && t.datum && t.cas && t.misto && t.misto !== "jine" && (t.vykon || "").trim())
+    && new Set(t0.map((t) => t.fronta_id)).size === t0.length;
+  if (kompletni) {
+    const nazev = (id) => S.rows.find((r) => r.id === id)?.jmeno || "?";
+    const kontrola = t0.flatMap((t) => [...(t.upozorneni ? [t.upozorneni] : []), ...varovani(t.datum, t.cas)].map((w) => `${nazev(t.fronta_id)}: ${w}`));
+    const neobj = (S.vysledek.neobjednani || []).filter((n) => platneId.has(n.fronta_id)).map((n) => nazev(n.fronta_id));
+    return potvrdit({ kontrola, neobj });
+  }
+  S.msg = { t: "err", m: "Některé termíny nejsou jednoznačné – doplňte je níže a potvrďte." };
   render();
 }
 
-async function potvrdit() {
+async function potvrdit(info = {}) {
   const items = S.vysledek.terminy.filter((t) => t.ulozit);
   for (const t of items) {
     const kdo = t.fronta_id ? S.rows.find((r) => r.id === t.fronta_id)?.jmeno : t.jmeno;
@@ -1059,7 +1070,9 @@ async function potvrdit() {
   S.busy = false; S.tab = "terminy";
   S.msg = r.error
     ? { t: "err", m: `Uloženo ${items.length} termínů, ale koncepty se nepodařilo vytvořit: ${r.error}` }
-    : { t: "ok", m: `Uloženo ${items.length} termínů, v Gmailu připraveno ${r.pocet} konceptů. Zkontrolujte je a odešlete.` };
+    : { t: "ok", m: [`Uloženo ${items.length} termínů, v Gmailu připraveno ${r.pocet} konceptů. Zkontrolujte je a odešlete.`,
+        info.kontrola?.length ? `⚠︎ Ke kontrole: ${info.kontrola.join("; ")}.` : "",
+        info.neobj?.length ? `Bez termínu zůstávají ve frontě: ${info.neobj.join(", ")}.` : ""].filter(Boolean).join(" ") };
   render(); window.scrollTo(0, 0);
 }
 
