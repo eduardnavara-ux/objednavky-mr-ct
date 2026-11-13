@@ -118,7 +118,7 @@ const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT "];
 // Konverzace v Claude, kde se diktuje hovor (stále stejná, ať nevznikají nové)
 // Objednání e-mailem (místo telefonu)
 const OBJ_EMAIL = { MR: "mr.homolka@fnmh.cz" };
-const PODPIS = "MUDr. Eduard Navara\nneurochirurgie, Nemocnice Na Homolce";
+const PODPIS = "MUDr. Eduard Navara\nneurochirurgie\nNemocnice Na Homolce";
 const CLAUDE_CHAT = "https://claude.ai/chat/16b5c444-abb4-4901-ab2f-ba9c950255c0";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -431,7 +431,7 @@ function viewEmailObjednani(list) {
 function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
 function mailProRecepci(rows, typ) {
   const predmet = `Objednání ${typ === "MR" ? "MR" : "CT"} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
-  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}${r.poznamka ? ` (${r.poznamka})` : ""}`);
+  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}`);
   const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
   return { predmet, telo };
 }
