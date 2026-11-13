@@ -416,7 +416,7 @@ function viewHovor() {
 
 function viewEmailObjednani(list) {
   const mr = list.filter((r) => r.typ === "MR" && S.vybrano.has(r.id));
-  const mrNove = mr.filter((r) => !r.zadost_thread_id);
+  const mrNove = mr.filter((r) => !r.zadost_at);
   const sZadosti = list.filter((r) => r.zadost_thread_id);
   const dat = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
   return `<div class="card">
@@ -762,7 +762,7 @@ app.addEventListener("click", async (e) => {
   }
   if (act === "vytahni") return vytahni();
   if (act === "zadostmr") {
-    const rows = cekajici("MR").filter((r) => S.vybrano.has(r.id) && !r.zadost_thread_id);
+    const rows = cekajici("MR").filter((r) => S.vybrano.has(r.id) && !r.zadost_at);
     if (!rows.length) return;
     b.disabled = true; b.textContent = "Připravuji koncept…";
     const { predmet, telo } = mailProRecepci(rows, "MR");
