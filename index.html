@@ -221,7 +221,7 @@ function render() {
       <button class="${S.tab === "fronta" ? "on" : ""}" data-act="tab" data-v="fronta">Fronta<span class="n">${nCeka}</span></button>
       <button class="${S.tab === "hovor" ? "on" : ""}" data-act="tab" data-v="hovor">Hovor</button>
       <button class="${S.tab === "terminy" ? "on" : ""}" data-act="tab" data-v="terminy">Termíny${nMail ? `<span class="n">${nMail}</span>` : ""}</button>
-      <button class="${S.tab === "cisla" ? "on" : ""}" data-act="tab" data-v="cisla">Čísla</button>
+      <button class="${S.tab === "cisla" ? "on" : ""}" data-act="tab" data-v="cisla">Nastavení</button>
     </nav>
   </header>
   <main>
@@ -597,6 +597,53 @@ function viewTerminy() {
   ${S.showOld ? `<div class="card">${probehle.length ? probehle.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>` : ""}`;
 }
 
+const pushPodpora = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const jeStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function viewPush() {
+  let obsah;
+  if (isIOS() && !jeStandalone()) {
+    obsah = `<small>Na iPhonu fungují upozornění jen v aplikaci spuštěné z plochy: v Safari dejte <b>Sdílet → Přidat na plochu</b>, otevřete aplikaci z ikony na ploše a vraťte se sem.</small>`;
+  } else if (!pushPodpora()) {
+    obsah = `<small>Tento prohlížeč upozornění nepodporuje.</small>`;
+  } else if (S.pushStav === "zapnuto") {
+    obsah = `<div class="okmsg" style="margin:8px 0">🔔 Upozornění jsou zapnutá na tomto zařízení.</div>
+      <button class="full" data-act="pushtest">Poslat zkušební upozornění</button>`;
+  } else if (Notification.permission === "denied") {
+    obsah = `<small>Upozornění jsou zakázaná v nastavení telefonu (Nastavení → Oznámení → Objednávky).</small>`;
+  } else {
+    obsah = `<small>Dostanete banner, když recepce odpoví a koncepty jsou připravené, nebo když je potřeba zavolat.</small>
+      <button class="primary full" data-act="pushzapnout" style="margin-top:8px">🔔 Zapnout upozornění</button>`;
+  }
+  return `<div class="card"><h2>Upozornění na telefonu</h2>${obsah}</div>`;
+}
+function b64ToU8(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+async function swRegistrace() {
+  if (!pushPodpora()) return null;
+  try { return await navigator.serviceWorker.register("sw.js"); } catch { return null; }
+}
+async function pushZjistiStav() {
+  const reg = await swRegistrace();
+  const sub = reg && (await reg.pushManager.getSubscription());
+  S.pushStav = sub && Notification.permission === "granted" ? "zapnuto" : "vypnuto";
+}
+async function pushZapnout() {
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("Upozornění nebyla povolena"); render(); return; }
+  const reg = await swRegistrace(); await navigator.serviceWorker.ready;
+  const { data, error } = await sb.functions.invoke("push", { body: { action: "klic" } });
+  if (error || !data?.publicKey) { S.msg = { t: "err", m: "Nepodařilo se získat klíč pro upozornění." }; render(); return; }
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(data.publicKey) });
+  const j = sub.toJSON();
+  const res = await sb.from("push_odbery").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, zarizeni: isIOS() ? "iPhone" : navigator.platform }, { onConflict: "endpoint" });
+  if (res.error) { S.msg = { t: "err", m: "Uložení odběru selhalo: " + res.error.message }; render(); return; }
+  S.pushStav = "zapnuto"; render(); toast("Upozornění zapnuta");
+}
+
 function viewCisla() {
   const typSel = (v) => `<select name="typ">
       <option value="" ${!v ? "selected" : ""}>— jen k volání —</option>
@@ -613,6 +660,7 @@ function viewCisla() {
       <a class="btn" href="${telHref(k.telefon)}">📞</a>
       <button class="ghost" data-act="kontaktedit" data-id="${k.id}" aria-label="Upravit">✎</button></div>`;
   return `
+  ${viewPush()}
   <div class="card"><h2>Telefonní čísla</h2>
     ${S.kontakty.length ? S.kontakty.map(radek).join("") : `<div class="empty">Zatím žádná čísla.</div>`}
   </div>
@@ -800,6 +848,8 @@ app.addEventListener("click", async (e) => {
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
     S.zpravy = null; S.vybrano = null; await nacti(); render(); toast(`Přidáno do fronty: ${rows.length}`); return;
   }
+  if (act === "pushzapnout") { b.disabled = true; b.textContent = "Zapínám…"; try { await pushZapnout(); } catch (e) { S.msg = { t: "err", m: "Zapnutí selhalo: " + e.message }; render(); } return; }
+  if (act === "pushtest") { const { data } = await sb.functions.invoke("push", { body: { action: "test" } }); toast(data?.odeslano ? "Odesláno – za chvíli přijde" : "Nic se neodeslalo"); return; }
   if (act === "kontaktedit") { S.editKontakt = b.dataset.id; render(); return; }
   if (act === "kontaktzpet") { S.editKontakt = null; render(); return; }
   if (act === "kontaktsmazat") {
@@ -1032,6 +1082,7 @@ S.user = session?.user || null;
 if (S.user) { await nacti(); if (cekajici().length) S.tab = "hovor"; }
 render();
 if (S.user) kontrolaStavu();
+pushZjistiStav().then(() => { if (S.tab === "cisla") render(); });
 </script>
 </body>
 </html>
