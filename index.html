@@ -192,6 +192,8 @@ async function nacti() {
   if (error) { S.msg = { t: "err", m: "Načtení selhalo: " + error.message }; return; }
   S.rows = data;
   await nactiKontakty();
+  const u = await sb.from("upozorneni").select("*").eq("precteno", false).order("created_at", { ascending: false }).limit(20);
+  S.upozorneni = u.data || [];
 }
 async function nactiKontakty() {
   let { data, error } = await sb.from("kontakty").select("*").order("poradi").order("nazev");
@@ -223,6 +225,12 @@ function render() {
     </nav>
   </header>
   <main>
+    ${(S.upozorneni || []).map((u) => `<div class="${u.typ === "akce" ? "warn" : "okmsg"}" style="margin:0 0 10px;font-size:15px">
+      <small>${new Date(u.created_at).toLocaleString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</small><br>${esc(u.text)}
+      <div class="row" style="margin-top:6px">
+        ${/Gmail/.test(u.text) ? `<a class="btn" href="${gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Gmail</a>` : ""}
+        ${/Zavolejte/.test(u.text) ? `<a class="btn" href="${telHref(cislo("MR"))}">📞 Volat</a>` : ""}
+        <button class="ghost" data-act="precteno" data-id="${u.id}">✓ Beru na vědomí</button></div></div>`).join("")}
     ${S.msg ? `<div class="${S.msg.t === "err" ? "err" : "okmsg"}">${esc(S.msg.m)}</div>` : ""}
     ${S.tab === "fronta" ? viewFronta() : S.tab === "hovor" ? viewHovor() : S.tab === "cisla" ? viewCisla() : viewTerminy()}
   </main>`;
@@ -423,7 +431,7 @@ function viewEmailObjednani(list) {
 function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
 function mailProRecepci(rows, typ) {
   const predmet = `Objednání ${typ === "MR" ? "MR" : "CT"} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
-  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}${r.telefon ? `, tel. ${r.telefon}` : ""}${r.poznamka ? ` (${r.poznamka})` : ""}`);
+  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}${r.poznamka ? ` (${r.poznamka})` : ""}`);
   const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
   return { predmet, telo };
 }
@@ -772,6 +780,7 @@ app.addEventListener("click", async (e) => {
     await nacti(); render(); return;
   }
   if (act === "stare") { S.showOld = !S.showOld; render(); return; }
+  if (act === "precteno") { await sb.from("upozorneni").update({ precteno: true }).eq("id", b.dataset.id); S.upozorneni = S.upozorneni.filter((u) => u.id !== b.dataset.id); render(); return; }
   if (act === "kontrola") { b.disabled = true; b.textContent = "Kontroluji…"; await kontrolaStavu(); render(); return; }
   if (act === "koncept") {
     b.disabled = true; b.textContent = "Vytvářím…";
@@ -1003,6 +1012,11 @@ async function potvrdit() {
     : { t: "ok", m: `Uloženo ${items.length} termínů, v Gmailu připraveno ${r.pocet} konceptů. Zkontrolujte je a odešlete.` };
   render(); window.scrollTo(0, 0);
 }
+
+// Po návratu do aplikace načíst čerstvá data (upozornění z hlídače)
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && S.user && !S.busy && !S.nahrava && !S.vysledek && !S.zpravy && !S.editId) { await nacti(); render(); }
+});
 
 // ---------- Start ----------
 sb.auth.onAuthStateChange(async (_ev, session) => {
