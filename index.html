@@ -116,6 +116,9 @@ const MISTA = {
 const MISTA_KRATCE = { "2p": "2. patro", "gama": "Gama", "4p": "4. patro" };
 const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT "];
 // Konverzace v Claude, kde se diktuje hovor (stále stejná, ať nevznikají nové)
+// Objednání e-mailem (místo telefonu)
+const OBJ_EMAIL = { MR: "mr.homolka@fnmh.cz" };
+const PODPIS = "MUDr. Eduard Navara\nneurochirurgie, Nemocnice Na Homolce";
 const CLAUDE_CHAT = "https://claude.ai/chat/16b5c444-abb4-4901-ab2f-ba9c950255c0";
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
@@ -281,7 +284,7 @@ function itemFronta(r) {
   }
   return `<div class="item">
     <div class="grow"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span><br>
-      <small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
+      ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
   </div>`;
@@ -375,6 +378,9 @@ function viewHovor() {
       <div><small>Recepce MR</small><br><a class="cislo" href="${telHref(cislo("MR"))}">${esc(cislo("MR"))}</a></div>
       <div><small>Recepce CT</small><br><a class="cislo" href="${telHref(cislo("CT"))}">${esc(cislo("CT"))}</a></div>
     </div>
+  </div>
+  ${viewEmailObjednani(list)}
+  <div class="card">
     ${S.nahrava
       ? `<button class="rec full big" data-act="nahravatstop">⏹ Ukončit nahrávání <span class="dot"></span> <span id="rectime">0:00</span></button>`
       : `<label class="f" style="margin-top:14px">1. Během hovoru</label>
@@ -393,6 +399,27 @@ function viewHovor() {
     </details>`}
   </div>
   ${S.vysledek ? viewVysledek() : ""}`;
+}
+
+function viewEmailObjednani(list) {
+  const mr = list.filter((r) => r.typ === "MR" && S.vybrano.has(r.id));
+  const mrNove = mr.filter((r) => !r.zadost_thread_id);
+  const sZadosti = list.filter((r) => r.zadost_thread_id);
+  const dat = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
+  return `<div class="card">
+    <h2>Objednat e-mailem (bez volání)</h2>
+    <small>Připraví koncept mailu na ${esc(OBJ_EMAIL.MR)} se seznamem MR pacientů. Odpověď recepce pak aplikace načte a termíny přiřadí sama.</small>
+    <button class="primary full" data-act="zadostmr" ${mrNove.length ? "" : "disabled"} style="margin-top:10px">✉︎ Připravit mail pro MR recepci (${mrNove.length})</button>
+    ${sZadosti.length ? `<div style="margin-top:12px"><small>Žádost e-mailem odeslána za: ${sZadosti.map((r) => `${esc(r.jmeno)} (${dat(r.zadost_at)})`).join(", ")}</small></div>
+      <button class="full" data-act="odpovedmr" style="margin-top:8px">📥 Načíst odpověď recepce a vytáhnout termíny</button>` : ""}
+  </div>`;
+}
+function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
+function mailProRecepci(rows, typ) {
+  const predmet = `Objednání ${typ === "MR" ? "MR" : "CT"} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
+  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno} – ${r.vykon}${r.telefon ? `, tel. ${r.telefon}` : ""}${r.poznamka ? ` (${r.poznamka})` : ""}`);
+  const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
+  return { predmet, telo };
 }
 
 function viewVysledek() {
@@ -672,6 +699,39 @@ app.addEventListener("click", async (e) => {
     return;
   }
   if (act === "vytahni") return vytahni();
+  if (act === "zadostmr") {
+    const rows = cekajici("MR").filter((r) => S.vybrano.has(r.id) && !r.zadost_thread_id);
+    if (!rows.length) return;
+    b.disabled = true; b.textContent = "Připravuji koncept…";
+    const { predmet, telo } = mailProRecepci(rows, "MR");
+    const res = await volejGmail({ action: "koncepty", maily: [{ klic: rows.map((r) => r.id).join(","), to: OBJ_EMAIL.MR, predmet, telo }] });
+    if (res.error) { S.msg = { t: "err", m: "Koncept se nepodařilo vytvořit: " + res.error }; render(); return; }
+    const v = (res.vysledky || [])[0];
+    if (!v?.threadId) { S.msg = { t: "err", m: "Koncept je v Gmailu, ale Gmail skript je starší verze – načítání odpovědi nebude fungovat, dokud ho neaktualizujete." }; }
+    await sb.from("objednavky").update({ zadost_thread_id: v?.threadId || null, zadost_at: new Date().toISOString() }).in("id", rows.map((r) => r.id));
+    await nacti(); render();
+    if (v?.threadId) toast("Koncept je v Gmailu – zkontrolujte a odešlete");
+    return;
+  }
+  if (act === "odpovedmr") {
+    const ids = [...new Set(cekajici().map((r) => r.zadost_thread_id).filter(Boolean))];
+    b.disabled = true; b.textContent = "Načítám odpověď…";
+    const res = await volejGmail({ action: "vlakno", threadIds: ids });
+    if (res.error) { S.msg = { t: "err", m: "Načtení odpovědi selhalo: " + res.error }; render(); return; }
+    const vl = res.vysledky || [];
+    const odpovedi = vl.flatMap((x) => x.odpovedi || []);
+    if (!odpovedi.length) {
+      render();
+      toast(vl.some((x) => x.odeslano) ? "Recepce zatím neodpověděla" : "Mail ještě nebyl odeslán – zkontrolujte koncepty v Gmailu");
+      return;
+    }
+    const text = odpovedi.map((o) => `--- e-mailová odpověď recepce (${new Date(o.datum).toLocaleString("cs-CZ")}) ---\n${o.text.trim()}`).join("\n\n");
+    const ta = document.getElementById("prepis");
+    const dosavad = (ta?.value || S.prepis || "").trim();
+    S.prepis = dosavad ? dosavad + "\n\n" + text : text;
+    if (ta) ta.value = S.prepis;
+    return vytahni();
+  }
   if (act === "vlozitzpracovat") {
     let t = "";
     try { t = await navigator.clipboard.readText(); } catch { toast("Schránku nejde přečíst – vložte text do pole ručně"); return; }
