@@ -258,7 +258,10 @@ function viewFronta() {
   <div class="card">
     <h2>Přidat pacienta ručně</h2>
     <form data-form="pridat" autocomplete="off">
-      <input name="jmeno" placeholder="Jméno (příjmení)" required>
+      <div class="grid2 resp">
+        <input name="jmeno" placeholder="Příjmení Jméno" required>
+        <input name="datum_narozeni" type="date" title="Datum narození">
+      </div>
       <div class="grid2 resp" style="margin-top:8px">
         <input name="email" type="email" placeholder="E-mail (nepovinné)" inputmode="email">
         <input name="telefon" placeholder="Telefon (nepovinné)" inputmode="tel">
@@ -275,7 +278,7 @@ function viewFronta() {
 function itemFronta(r) {
   if (S.editId === r.id) {
     return `<form class="item" data-form="upravit" data-id="${r.id}" style="display:block">
-      <input name="jmeno" value="${esc(r.jmeno)}" required>
+      <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="datum_narozeni" type="date" value="${esc(r.datum_narozeni)}" title="Datum narození"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"><input name="telefon" value="${esc(r.telefon)}" placeholder="Telefon" inputmode="tel"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
@@ -283,7 +286,7 @@ function itemFronta(r) {
     </form>`;
   }
   return `<div class="item">
-    <div class="grow"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span><br>
+    <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(r.vykon)}</span><br>
       ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
@@ -301,7 +304,8 @@ function viewZeZpravy() {
       <div class="card" style="margin:10px 0 0;background:#fafbfc">
         <div class="row between"><b>${esc(p.jmeno) || "?"}</b>
           <label class="chk"><input type="checkbox" data-z="${i}" data-k="pridat" ${p.pridat ? "checked" : ""}> přidat</label></div>
-        <input data-z="${i}" data-k="jmeno" value="${esc(p.jmeno)}" placeholder="Jméno" style="margin-top:6px">
+        <div class="grid2 resp" style="margin-top:6px"><input data-z="${i}" data-k="jmeno" value="${esc(p.jmeno)}" placeholder="Jméno">
+          <input data-z="${i}" data-k="datum_narozeni" type="date" value="${esc(p.datum_narozeni)}" title="Datum narození"></div>
         <div class="grid2 resp" style="margin-top:8px">
           <input data-z="${i}" data-k="email" value="${esc(p.email)}" placeholder="E-mail" type="email" inputmode="email">
           <input data-z="${i}" data-k="telefon" value="${esc(p.telefon)}" placeholder="Telefon" inputmode="tel"></div>
@@ -310,6 +314,7 @@ function viewZeZpravy() {
           <input data-z="${i}" data-k="poznamka" value="${esc(p.poznamka)}" placeholder="Poznámka"></div>
         ${p.duplicita ? `<div class="warn">⚠︎ Stejný pacient s tímto výkonem už ve frontě čeká.</div>` : ""}
         ${!p.email ? `<div class="warn">⚠︎ Na zprávě jsem nenašel e-mail.</div>` : ""}
+        ${!p.datum_narozeni ? `<div class="warn">⚠︎ Chybí datum narození.</div>` : ""}
         ${p.nejiste ? `<div class="warn">⚠︎ ${esc(p.nejiste)}</div>` : ""}
       </div>`).join("") : `<div class="empty">Na fotkách jsem nenašel žádného pacienta.</div>`;
     obsah += `<div class="grid2" style="margin-top:10px">
@@ -354,8 +359,8 @@ async function nactiZpravy(files) {
   for (const p of data.pacienti || []) {
     const vykony = p.vykony?.length ? p.vykony : [""];
     for (const v of vykony) {
-      const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v));
-      polozky.push({ jmeno: p.jmeno || "", email: p.email || "", telefon: p.telefon || "", vykon: v, poznamka: p.poznamka || "",
+      const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v) && (!r.datum_narozeni || !p.datum_narozeni || r.datum_narozeni === p.datum_narozeni));
+      polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", vykon: v, poznamka: p.poznamka || "",
         nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita, pridat: !!v && !duplicita });
     }
   }
@@ -409,6 +414,7 @@ function viewEmailObjednani(list) {
   return `<div class="card">
     <h2>Objednat e-mailem (bez volání)</h2>
     <small>Připraví koncept mailu na ${esc(OBJ_EMAIL.MR)} se seznamem MR pacientů. Odpověď recepce pak aplikace načte a termíny přiřadí sama.</small>
+    ${mrNove.some((r) => !r.datum_narozeni) ? `<div class="warn">⚠︎ Bez data narození: ${mrNove.filter((r) => !r.datum_narozeni).map((r) => esc(r.jmeno)).join(", ")} – doplňte ve Frontě (✎).</div>` : ""}
     <button class="primary full" data-act="zadostmr" ${mrNove.length ? "" : "disabled"} style="margin-top:10px">✉︎ Připravit mail pro MR recepci (${mrNove.length})</button>
     ${sZadosti.length ? `<div style="margin-top:12px"><small>Žádost e-mailem odeslána za: ${sZadosti.map((r) => `${esc(r.jmeno)} (${dat(r.zadost_at)})`).join(", ")}</small></div>
       <button class="full" data-act="odpovedmr" style="margin-top:8px">📥 Načíst odpověď recepce a vytáhnout termíny</button>` : ""}
@@ -417,8 +423,8 @@ function viewEmailObjednani(list) {
 function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
 function mailProRecepci(rows, typ) {
   const predmet = `Objednání ${typ === "MR" ? "MR" : "CT"} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
-  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno} – ${r.vykon}${r.telefon ? `, tel. ${r.telefon}` : ""}${r.poznamka ? ` (${r.poznamka})` : ""}`);
-  const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
+  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}${r.telefon ? `, tel. ${r.telefon}` : ""}${r.poznamka ? ` (${r.poznamka})` : ""}`);
+  const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
   return { predmet, telo };
 }
 
@@ -636,7 +642,7 @@ app.addEventListener("submit", async (e) => {
   }
   if (kind === "pridat") {
     const vykon = fd.vykon.trim();
-    const row = { jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
+    const row = { jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
     const { error } = await sb.from("objednavky").insert(row);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
     await nacti(); S.vybrano = null; render(); toast("Přidáno do fronty");
@@ -659,7 +665,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
+      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
@@ -779,7 +785,7 @@ app.addEventListener("click", async (e) => {
     const vyber = S.zpravy.polozky.filter((p) => p.pridat);
     if (!vyber.length) { toast("Nic není vybráno"); return; }
     if (vyber.some((p) => !p.jmeno.trim() || !p.vykon.trim())) { toast("Doplňte jméno a výkon"); return; }
-    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), email: p.email.trim() || null, telefon: p.telefon.trim() || null,
+    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null,
       vykon: p.vykon.trim(), typ: typZVykonu(p.vykon), poznamka: p.poznamka.trim() || null }));
     const { error } = await sb.from("objednavky").insert(rows);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
