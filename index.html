@@ -951,7 +951,7 @@ async function vytahni() {
   const prepis = (document.getElementById("prepis")?.value || "").trim();
   S.prepis = prepis;
   if (prepis.length < 10) { toast("Nejdřív vložte přepis"); return; }
-  const fronta = cekajici().filter((r) => S.vybrano.has(r.id)).map((r) => ({ id: r.id, jmeno: r.jmeno, vykon: r.vykon }));
+  const fronta = cekajici().filter((r) => S.vybrano.has(r.id)).map((r) => ({ id: r.id, jmeno: r.jmeno + (r.datum_narozeni ? ` (nar. ${fmtDatum(r.datum_narozeni)})` : ""), vykon: r.vykon }));
   S.busy = true; S.msg = null; S.vysledek = null; render();
   const { data, error } = await sb.functions.invoke("vytahni-terminy", { body: { prepis, typ: "ALL", dnes: dnesISO(), fronta } });
   S.busy = false;
