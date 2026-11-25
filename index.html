@@ -159,6 +159,26 @@
   .timeline li.now .tl-dot { border-color: var(--warn); background: var(--warn-bg); }
   .papir { background: #fff; border: 1px solid var(--line); padding: 14px; font: 13px Arial, sans-serif; overflow: auto; box-shadow: var(--shadow); }
   .papir table { border-collapse: collapse; width: 100%; } .papir td, .papir th { border: 1px solid #444; padding: 5px; vertical-align: top; text-align: left; } .papir h1 { font-size: 16px; margin: 0 0 10px; }
+
+  .tools-title { font-size: 12px; font-weight: 600; color: var(--muted); margin: 26px 0 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+  .summary { display: flex; align-items: center; gap: 7px; margin-bottom: 20px; font-size: 13px; color: var(--muted); }
+  .summary strong { color: var(--text); font-weight: 650; } .summary .separator { color: #c6cdd4; }
+  .section { margin-bottom: 22px; } .section-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+  .section-heading h2 { font-size: 17px; font-weight: 650; letter-spacing: -.3px; margin: 0; } .section-count { font-size: 12px; color: var(--muted); } .section-note { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .patient-list { display: grid; gap: 7px; }
+  .patient { display: block; width: 100%; text-align: left; padding: 13px 14px; min-height: 80px; margin: 0; background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+  .patient-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .patient-name { font-size: 16px; font-weight: 650; letter-spacing: -.25px; overflow-wrap: anywhere; } .chevron { color: #9ba6b0; font-size: 22px; line-height: 1; }
+  .procedure { display: block; font-size: 14px; margin-top: 3px; color: #485560; font-weight: 400; }
+  .patient-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+  .status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; line-height: 1.3; }
+  .status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+  .status.orange { color: var(--warn); background: var(--warn-bg); } .status.blue { color: var(--blue); background: var(--blue-bg); } .status.green { color: var(--ok); background: var(--ok-bg); }
+  .patient-hint { color: var(--muted); font-size: 11px; text-align: right; font-weight: 400; }
+  .batch-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+  .batch-info { font-size: 11px; color: var(--muted); } .batch-info strong { display: block; font-size: 12px; color: var(--navy); font-weight: 600; }
+  .batch-button { min-height: 44px; padding: 8px 12px; background: #edf2f6; color: var(--navy); border: 0; border-radius: 8px; font-size: 12px; font-weight: 600; }
+  .papir { background: #fff; box-shadow: 0 3px 14px rgba(0,0,0,.12); border: 0; padding: 18px; }
 </style>
 </head>
 <body>
@@ -374,26 +394,37 @@ function faze(r) {
   if (!r.zadost_at) return { g: "akce", t: "objednat u recepce", krok: "objednat" };
   return { g: "ceka", t: "čeká na termín od recepce" };
 }
-const SEKCE = [["MR", "MR", (r) => r.typ === "MR"], ["PRT", "PRT a obstřiky pod CT", (r) => r.typ === "CT"], ["PET", "PET s NaF", (r) => r.typ === "PET"], ["KB", "KB – kaudální blok (osobně)", (r) => r.typ === "NEU"]];
+const SEKCE = [["MR", "MR", (r) => r.typ === "MR"], ["PRT", "PRT / obstřiky", (r) => r.typ === "CT"], ["PET", "PET s NaF", (r) => r.typ === "PET"], ["KB", "KB", (r) => r.typ === "NEU"]];
 const fronta = () => S.rows.filter((r) => r.stav === "ceka" && !r.zadost_at);
 function kartaPac(r) {
   if (S.editId === r.id) return itemFronta(r);
   const f = faze(r);
-  return `<button class="pac2" data-act="detail" data-id="${r.id}">
-    <span class="pac2-top"><b>${esc(r.jmeno)}</b><span class="tag">${esc(vykonZobraz(r.vykon))}</span></span>
-    <span class="pac2-bot"><span class="stav ${f.g}">${esc(f.t)}</span><span class="sipka">›</span></span></button>`;
+  const barva = f.g === "akce" ? "orange" : f.g === "ceka" ? "blue" : "green";
+  const hint = r.zadanka_at ? "žádanka hotová" : r.kartoteka ? "bez žádanky" : "";
+  return `<button class="card patient" data-act="detail" data-id="${r.id}">
+    <span class="patient-top"><span class="patient-name">${esc(r.jmeno)}</span><span class="chevron">›</span></span>
+    <span class="procedure">${esc(vykonZobraz(r.vykon))}</span>
+    <span class="patient-bottom"><span class="status ${barva}">${esc(f.t)}</span><span class="patient-hint">${hint}</span></span></button>`;
 }
 function viewSkupiny() {
   const rs = fronta();
-  const nA = rs.filter((r) => faze(r).g === "akce").length, nC = rs.length - nA;
+  const nA = rs.filter((r) => faze(r).g === "akce").length;
   const razeni = (a, b) => (a.jmeno || "").localeCompare(b.jmeno || "", "cs");
+  const poznamky = { PRT: "Evidence", KB: "Osobní vyřízení" };
   const sek = SEKCE.map(([k, nazev, test]) => {
     const l = rs.filter(test).sort(razeni);
     if (!l.length) return "";
-    return `<section class="skup"><h2>${nazev}<em>${l.length}</em></h2>${l.map(kartaPac).join("")}</section>`;
+    let batch = "";
+    if (k === "MR" || k === "PET") {
+      const hotovo = l.filter((x) => x.zadanka_at && x.kartoteka).length, nelze = l.length - hotovo;
+      batch = `<div class="batch-action"><div class="batch-info"><strong>${hotovo} ${cesky(hotovo, "pacient připraven", "pacienti připraveni", "pacientů připraveno")}</strong>${nelze ? `${nelze} zatím nelze objednat (bez žádanky)` : "všichni jsou v konceptu"}</div>
+        <button class="batch-button" data-act="zadost" data-v="${k}" ${hotovo ? "" : "disabled"}>✉︎ Koncept ${k} (${hotovo})</button></div>`;
+    }
+    return `<section class="section"><div class="section-heading"><h2>${nazev}</h2><span class="section-count">${l.length}</span>${poznamky[k] ? `<span class="section-note">${poznamky[k]}</span>` : ""}</div><div class="patient-list">${l.map(kartaPac).join("")}</div>${batch}</section>`;
   }).join("");
-  return `<div class="souhrn"><div><b style="color:var(--warn)">${nA}</b><span>vyžadují akci</span></div><div><b style="color:var(--blue)">${nC}</b><span>čekají</span></div><div><b>${rs.length}</b><span>ve frontě</span></div></div>
-  ${sek || `<div class="card empty">Fronta je prázdná.</div>`}`;
+  return `<div class="summary"><strong>${rs.length} ${cesky(rs.length, "pacient", "pacienti", "pacientů")}</strong><span class="separator">·</span> ${nA} vyžaduje akci</div>
+  ${sek || `<div class="card empty" style="padding:16px">Fronta je prázdná.</div>`}
+  <h2 class="tools-title">Kartotéka a nástroje</h2>`;
 }
 function viewHovory() {
   const typy = ["MR", "CT", "NEU", "PET"].filter((t) => cekajici(t).length);
@@ -1020,6 +1051,7 @@ app.addEventListener("click", async (e) => {
   if (act === "vytahni") return vytahni();
   if (act === "zadost") {
     const typ = b.dataset.v;
+    if (!S.vybrano) S.vybrano = new Set(cekajici().map((x) => x.id));
     const rows = cekajici(typ).filter((r) => S.vybrano.has(r.id) && !r.zadost_at && r.zadanka_at);
     if (!rows.length) return;
     b.disabled = true; b.textContent = "Připravuji koncept…";
