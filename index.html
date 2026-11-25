@@ -296,6 +296,7 @@ function itemFronta(r) {
       <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="datum_narozeni" type="date" value="${esc(r.datum_narozeni)}" title="Datum narození"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"><input name="telefon" value="${esc(r.telefon)}" placeholder="Telefon" inputmode="tel"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
+      <div class="grid2 resp" style="margin-top:8px"><input name="rodne_cislo" value="${esc(r.rodne_cislo)}" placeholder="Rodné číslo (nepovinné)" inputmode="numeric" autocomplete="off"><input name="pojistovna" value="${esc(r.pojistovna)}" placeholder="Pojišťovna (nepovinné)" autocomplete="off"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
       <span class="grow"></span><button type="button" class="ghost" data-act="smazat" data-id="${r.id}">Smazat</button></div>
     </form>`;
@@ -303,7 +304,9 @@ function itemFronta(r) {
   return `<div class="item">
     <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(r.vykon)}</span>
       <button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;${r.kartoteka ? "background:#e7f5ee;color:#1f7a4d" : "background:#fdecea;color:#b42318"}">${r.kartoteka ? "✓ v kartotéce" : "✗ neregistrován"}</button><br>
-      ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
+      ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}
+      ${r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna) ? `<span class="tag" style="background:#fff4e0;color:#8a5a00">✉︎ čekám na RČ a pojišťovnu od pacienta</span><br>` : ""}
+      ${r.rodne_cislo || r.pojistovna ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">RČ ${r.rodne_cislo ? `<button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px;font:inherit" aria-label="Zkopírovat rodné číslo">${esc(r.rodne_cislo)} ⧉</button>` : "–"} · ${esc(r.pojistovna) || "pojišťovna –"}</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
   </div>`;
@@ -729,7 +732,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null,
+      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
@@ -741,6 +744,10 @@ app.addEventListener("click", async (e) => {
   const act = b.dataset.act;
   if (act === "gmail") return; // nechat odkaz otevřít
   e.preventDefault();
+  if (act === "kopirovat") {
+    try { await navigator.clipboard.writeText(b.dataset.v || ""); toast("Rodné číslo zkopírováno"); } catch { toast("Kopírování se nepovedlo"); }
+    return;
+  }
   if (act === "kartoteka") {
     const r = S.rows.find((x) => x.id === b.dataset.id); if (!r) return;
     const nova = !r.kartoteka;
