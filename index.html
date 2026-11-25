@@ -412,7 +412,7 @@ function itemFronta(r) {
         <div class="grid2 resp" style="margin-top:8px"><input name="termin_datum" type="date" value="${esc(r.termin_datum)}" title="Datum termínu"><input name="termin_cas" type="time" value="${esc((r.termin_cas || "").slice(0, 5))}" title="Čas"></div>
         <select name="misto" style="margin-top:8px"><option value="">Místo – nevybráno</option>${Object.keys(MISTA).map((k) => `<option value="${k}" ${mistoKod(r.misto) === k ? "selected" : ""}>${MISTA_KRATCE[k]}</option>`).join("")}</select>
         <div class="grid2 resp" style="margin-top:8px"><input name="vaha_kg" type="number" step="0.1" inputmode="decimal" value="${esc(r.vaha_kg)}" placeholder="Váha (kg)"><input name="vyska_cm" type="number" inputmode="numeric" value="${esc(r.vyska_cm)}" placeholder="Výška (cm)"></div>
-        <select name="cukrovka" style="margin-top:8px"><option value="" ${r.cukrovka == null ? "selected" : ""}>Cukrovka – nezadáno</option><option value="ne" ${r.cukrovka === false ? "selected" : ""}>Cukrovka: ne</option><option value="ano" ${r.cukrovka === true ? "selected" : ""}>Cukrovka: ano</option></select>
+        <select name="cukrovka" style="margin-top:8px"><option value="ne" ${r.cukrovka !== true ? "selected" : ""}>Cukrovka: ne (výchozí)</option><option value="ano" ${r.cukrovka === true ? "selected" : ""}>Cukrovka: ano</option></select>
       </details>
       <div class="grid2 resp" style="margin-top:8px"><input name="adresa" value="${esc(r.adresa)}" placeholder="Adresa (Ulice č., PSČ Obec)" style="grid-column:1/-1"><input name="rodne_cislo" value="${esc(r.rodne_cislo)}" placeholder="Rodné číslo (nepovinné)" inputmode="numeric" autocomplete="off"><input name="pojistovna" value="${esc(r.pojistovna)}" placeholder="Pojišťovna (nepovinné)" autocomplete="off"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
@@ -462,6 +462,7 @@ function viewZeZpravy() {
           <input data-z="${i}" data-k="telefon" value="${esc(p.telefon)}" placeholder="Telefon" inputmode="tel"></div>
         <input data-z="${i}" data-k="adresa" value="${esc(p.adresa)}" placeholder="Adresa" style="margin-top:8px">
         <div class="grid2 resp" style="margin-top:8px"><input data-z="${i}" data-k="rodne_cislo" value="${esc(p.rodne_cislo)}" placeholder="Rodné číslo" inputmode="numeric" autocomplete="off"><input data-z="${i}" data-k="pojistovna" value="${esc(p.pojistovna)}" placeholder="Pojišťovna" autocomplete="off"></div>
+        <div class="grid2 resp" style="margin-top:8px"><input data-z="${i}" data-k="vaha_kg" value="${esc(p.vaha_kg)}" placeholder="Váha (kg)" inputmode="decimal"><input data-z="${i}" data-k="vyska_cm" value="${esc(p.vyska_cm)}" placeholder="Výška (cm)" inputmode="numeric"></div>
         <div class="grid2 resp" style="margin-top:8px">
           <input data-z="${i}" data-k="vykon" value="${esc(p.vykon)}" placeholder="Výkon">
           <input data-z="${i}" data-k="poznamka" value="${esc(p.poznamka)}" placeholder="Poznámka"></div>
@@ -514,7 +515,7 @@ async function nactiZpravy(files) {
     const vykony = p.vykony?.length ? p.vykony : [""];
     for (const v of vykony) {
       const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v) && (!r.datum_narozeni || !p.datum_narozeni || r.datum_narozeni === p.datum_narozeni));
-      polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", adresa: p.adresa || "", rodne_cislo: p.rodne_cislo || "", pojistovna: p.pojistovna || "", vykon: v, poznamka: p.poznamka || "",
+      polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", adresa: p.adresa || "", rodne_cislo: p.rodne_cislo || "", pojistovna: p.pojistovna || "", vaha_kg: p.vaha_kg || "", vyska_cm: p.vyska_cm || "", vykon: v, poznamka: p.poznamka || "",
         nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita, pridat: !!v && !duplicita });
     }
   }
@@ -579,7 +580,7 @@ function viewEmailObjednani(list) {
 function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
 function mailProRecepci(rows, typ) {
   const predmet = `Objednání ${typ} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
-  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}` + (typ === "PET" ? `\n   váha: ${r.vaha_kg ? r.vaha_kg + " kg" : "?"}, výška: ${r.vyska_cm ? r.vyska_cm + " cm" : "?"}, cukrovka: ${r.cukrovka == null ? "?" : r.cukrovka ? "ano" : "ne"}, tel. na pacienta: ${r.telefon || "?"}\n   IČP: ${ICP_NCH || "?"} (ambulance neurochirurgie NCH)` : ""));
+  const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}` + (typ === "PET" ? `\n   váha: ${r.vaha_kg ? r.vaha_kg + " kg" : "?"}, výška: ${r.vyska_cm ? r.vyska_cm + " cm" : "?"}, cukrovka: ${r.cukrovka ? "ano" : "ne"}, tel. na pacienta: ${r.telefon || "?"}\n   IČP: ${ICP_NCH || "?"} (ambulance neurochirurgie NCH)` : ""));
   const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : typ === "PET" ? "vyšetření na PET centru" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
   return { predmet, telo };
 }
@@ -869,7 +870,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, poznamka_mail: (fd.poznamka_mail || "").trim() || null, vaha_kg: fd.vaha_kg ? Number(fd.vaha_kg) : null, vyska_cm: fd.vyska_cm ? Number(fd.vyska_cm) : null, cukrovka: fd.cukrovka === "ano" ? true : fd.cukrovka === "ne" ? false : null, ...(fd.termin_datum && fd.termin_cas && fd.misto ? { stav: "objednano", termin_datum: fd.termin_datum, termin_cas: fd.termin_cas, misto: MISTA[fd.misto], objednano_at: new Date().toISOString() } : {}), adresa: (fd.adresa || "").trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
+      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, poznamka_mail: (fd.poznamka_mail || "").trim() || null, vaha_kg: fd.vaha_kg ? Number(fd.vaha_kg) : null, vyska_cm: fd.vyska_cm ? Number(fd.vyska_cm) : null, cukrovka: fd.cukrovka === "ano", ...(fd.termin_datum && fd.termin_cas && fd.misto ? { stav: "objednano", termin_datum: fd.termin_datum, termin_cas: fd.termin_cas, misto: MISTA[fd.misto], objednano_at: new Date().toISOString() } : {}), adresa: (fd.adresa || "").trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
@@ -1018,7 +1019,7 @@ app.addEventListener("click", async (e) => {
     const vyber = S.zpravy.polozky.filter((p) => p.pridat);
     if (!vyber.length) { toast("Nic není vybráno"); return; }
     if (vyber.some((p) => !p.jmeno.trim() || !p.vykon.trim())) { toast("Doplňte jméno a výkon"); return; }
-    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null, adresa: (p.adresa || "").trim() || null, rodne_cislo: (p.rodne_cislo || "").trim() || null, pojistovna: (p.pojistovna || "").trim() || null,
+    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null, adresa: (p.adresa || "").trim() || null, rodne_cislo: (p.rodne_cislo || "").trim() || null, pojistovna: (p.pojistovna || "").trim() || null, vaha_kg: Number(String(p.vaha_kg || "").replace(",", ".")) || null, vyska_cm: Number(p.vyska_cm) || null,
       vykon: p.vykon.trim(), typ: typZVykonu(p.vykon), poznamka: p.poznamka.trim() || null }));
     const { error } = await sb.from("objednavky").insert(rows);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
