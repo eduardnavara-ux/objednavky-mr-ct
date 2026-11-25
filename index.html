@@ -256,7 +256,7 @@ function sestavMail(rows) {
   const predmet = "termín " + r.map((x) => genitivPredmet(x.vykon)).join(" a ");
   const vety = r.map((x, i) =>
     `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}.${TEL[x.typ] ? `\nPro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
-  if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += "\nPo absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
+  if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += "\n\nPo absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
   const pozn = [...new Set(r.map((x) => (x.poznamka_mail || "").trim()).filter(Boolean))];
   const telo = `Dobrý den,\n\n${vety.join("\n\n")}${pozn.length ? "\n\n" + pozn.join("\n\n") : ""}\n\nS pozdravem,\nNavara`;
   return { predmet, telo };
@@ -323,10 +323,10 @@ function render() {
     </nav>
   </header>
   <main>
-    ${(S.upozorneni || []).map((u) => `<div class="${u.typ === "akce" ? "warn" : "okmsg"}" style="margin:0 0 10px;font-size:15px">
+    ${(S.upozorneni || []).map((u) => `<div class="${u.typ === "akce" ? "warn" : "okmsg"}" style="margin:0 0 10px;font-size:15px;white-space:pre-line">
       <small>${new Date(u.created_at).toLocaleString("cs-CZ", { weekday: "short", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</small><br>${esc(u.text)}
       <div class="row" style="margin-top:6px">
-        ${/Gmail/.test(u.text) ? `<a class="btn" href="${gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Gmail</a>` : ""}
+        ${/Gmail/.test(u.text) ? `<a class="btn" href="${gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Gmail</a>` : ""}${/odešlete v záložce Termíny/.test(u.text) ? `<button data-act="tab" data-v="terminy">Otevřít Termíny</button>` : ""}
         ${/Zavolejte/.test(u.text) ? `<a class="btn" href="${telHref(/PET/.test(u.text) ? cislo("PET") : cislo("MR"))}">📞 Volat</a>` : ""}
         <button class="ghost" data-act="precteno" data-id="${u.id}">✓ Beru na vědomí</button></div></div>`).join("")}
     ${S.msg ? `<div class="${S.msg.t === "err" ? "err" : "okmsg"}">${esc(S.msg.m)}</div>` : ""}
@@ -792,8 +792,9 @@ function viewTerminy() {
       ${!email ? `<div class="warn">⚠︎ Bez e-mailu – koncept vznikne bez příjemce.</div>` : ""}
       <details><summary>Náhled mailu</summary><pre class="mail"><b>${esc(predmet)}</b>\n\n${esc(telo)}</pre></details>
       <div class="grid2" style="margin-top:10px">
-        <button class="primary" data-act="koncept" data-ids="${ids}">✉︎ Vytvořit koncept</button>
-        <button data-act="odeslano" data-ids="${ids}">✓ Odesláno ručně</button>
+        <button class="primary" data-act="odeslatmail" data-ids="${ids}">➤ Odeslat mail</button>
+        <button data-act="koncept" data-ids="${ids}">✉︎ Jen koncept</button>
+        <button data-act="odeslano" data-ids="${ids}" style="grid-column:1/-1">✓ Odesláno ručně</button>
       </div>
     </div>`;
   }).join("");
@@ -1128,6 +1129,23 @@ app.addEventListener("click", async (e) => {
     render(); if (!res.error) toast("Koncept je v Gmailu"); return;
   }
   if (act === "zpravyzrusit") { S.zpravy = null; render(); return; }
+  if (act === "odeslatmail") {
+    const ids = b.dataset.ids.split(",");
+    const rows = S.rows.filter((x) => ids.includes(String(x.id)));
+    if (!rows.length) return;
+    const email = rows.find((x) => x.email)?.email;
+    if (!email) { toast("Doplňte e-mail pacienta"); return; }
+    if (!confirm(`Odeslat mail na ${email}?`)) return;
+    b.disabled = true; b.textContent = "Odesílám…";
+    const { predmet, telo } = sestavMail(rows);
+    const res = await volejGmail({ action: "odeslat", maily: [{ klic: ids.join(","), to: email, predmet, telo }] });
+    if (res.error || !res.vysledky?.[0]?.odeslano) { b.disabled = false; b.textContent = "➤ Odeslat mail"; toast("Odeslání selhalo: " + (res.error || "neznámá chyba")); return; }
+    toast("Odesláno – za chvíli ověřím");
+    const now = new Date().toISOString();
+    await sb.from("objednavky").update({ stav: "mail_odeslan", mail_odeslan_at: now }).in("id", ids);
+    await nacti(); render();
+    return;
+  }
   if (act === "mailkoncept") {
     const r0 = S.rows.find((x) => String(x.id) === String(b.dataset.id));
     if (!r0 || !r0.email) { toast("Chybí e-mail"); return; }
