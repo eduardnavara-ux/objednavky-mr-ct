@@ -813,7 +813,11 @@ function viewTerminy() {
     const ids = rows.map((r) => r.id).join(",");
     return `<div class="item"><div class="grow">
         <b>${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</b> <small>${email ? esc(email) : "bez příjemce"}</small>
-        ${terminyLi(rows, false)}${gmailKonceptUrl(rows) ? `<div style="margin-top:6px"><a href="${gmailKonceptUrl(rows)}" target="_blank" rel="noopener">✉︎ Otevřít tento koncept</a></div>` : ""}</div>
+        ${terminyLi(rows, false)}
+        ${(() => { const dr = rows.find((x) => x.gmail_draft_id)?.gmail_draft_id; const nh = dr && (S.nahledy || {})[dr];
+          return `${nh ? `<div class="mail-nahled"><small>Komu: ${esc(nh.to || email)}</small><pre class="mail"><b>${esc(nh.predmet)}</b>\n\n${esc(nh.telo)}</pre>${nh.zalozni ? `<small>Gmail skript zatím neumí načíst skutečný koncept – ukazuji text, jaký aplikace sestavila.</small>` : ""}</div>` : ""}
+          <div class="row" style="margin-top:8px;flex-wrap:nowrap"><button class="grow" data-act="konceptnahled" data-draft="${dr || ""}" data-ids="${ids}">${nh ? "Skrýt náhled" : "👁 Náhled mailu"}</button><button class="primary grow" data-act="konceptodeslat" data-draft="${dr || ""}" data-ids="${ids}">➤ Odeslat</button></div>`; })()}
+      </div>
       <button class="ghost" data-act="odeslano" data-ids="${ids}" title="Označit jako odeslané">✓</button></div>`;
   }).join("");
 
@@ -1136,6 +1140,33 @@ app.addEventListener("click", async (e) => {
     render(); if (!res.error) toast("Koncept je v Gmailu"); return;
   }
   if (act === "zpravyzrusit") { S.zpravy = null; render(); return; }
+  if (act === "konceptnahled") {
+    const dr = b.dataset.draft; S.nahledy = S.nahledy || {};
+    if (S.nahledy[dr]) { delete S.nahledy[dr]; render(); return; }
+    b.disabled = true;
+    const res = await volejGmail({ action: "nahled", polozky: [{ draftId: dr }] });
+    const v = res?.vysledky?.[0];
+    if (v?.ok) S.nahledy[dr] = { to: v.to, predmet: v.predmet, telo: v.telo };
+    else {
+      const rows = S.rows.filter((x) => b.dataset.ids.split(",").includes(String(x.id)));
+      const m = sestavMail(rows);
+      S.nahledy[dr] = { to: rows.find((x) => x.email)?.email, predmet: m.predmet, telo: m.telo, zalozni: true };
+    }
+    render(); return;
+  }
+  if (act === "konceptodeslat") {
+    const ids = b.dataset.ids.split(","), dr = b.dataset.draft;
+    const rows = S.rows.filter((x) => ids.includes(String(x.id)));
+    const email = rows.find((x) => x.email)?.email;
+    if (!dr) { toast("Koncept v Gmailu nemá ID"); return; }
+    if (!confirm(`Odeslat mail na ${email || "adresu v konceptu"}?`)) return;
+    b.disabled = true; b.textContent = "Odesílám…";
+    const res = await volejGmail({ action: "odeslat", maily: [{ klic: ids.join(","), draftId: dr }] });
+    if (res.error || !res.vysledky?.[0]?.odeslano) { b.disabled = false; b.textContent = "➤ Odeslat"; toast("Odeslání selhalo: " + (res.error || res.vysledky?.[0]?.chyba || "neznámá chyba")); return; }
+    await sb.from("objednavky").update({ stav: "mail_odeslan", mail_odeslan_at: new Date().toISOString() }).in("id", ids);
+    if (S.nahledy) delete S.nahledy[dr];
+    await nacti(); render(); toast("Mail odeslán"); return;
+  }
   if (act === "odeslatmail") {
     const ids = b.dataset.ids.split(",");
     const rows = S.rows.filter((x) => ids.includes(String(x.id)));
