@@ -496,14 +496,14 @@ function viewHovor() {
 }
 
 function viewEmailObjednani(list) {
-  const nove = (typ) => list.filter((r) => r.typ === typ && S.vybrano.has(r.id) && !r.zadost_at && r.zadanka_at);
+  const nove = (typ) => list.filter((r) => r.typ === typ && S.vybrano.has(r.id) && !r.zadost_at);
   const bezZadanky = list.filter((r) => !r.zadost_at && !r.zadanka_at);
   const sZadosti = list.filter((r) => r.zadost_thread_id);
   const dat = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
   const bezData = Object.keys(OBJ_EMAIL).flatMap(nove).filter((r) => !r.datum_narozeni);
   return `<div class="card">
     <h2>Objednat e-mailem (bez volání)</h2>
-    ${bezZadanky.length ? `<div class="warn">Čeká na žádanku (ve Frontě označte „Žádanka hotová“): ${bezZadanky.map((r) => esc(r.jmeno)).join(", ")}</div>` : ""}
+    ${bezZadanky.length ? `<div class="warn">Bez označené žádanky (jen upozornění, koncept lze přesto připravit): ${bezZadanky.map((r) => esc(r.jmeno)).join(", ")}</div>` : ""}
     <small>Připraví koncept mailu se seznamem pacientů (MR → ${esc(OBJ_EMAIL.MR)}, PET → ${esc(OBJ_EMAIL.PET)}). Odpověď pak aplikace hlídá a termíny přiřadí sama.</small>
     ${bezData.length ? `<div class="warn">⚠︎ Bez data narození: ${bezData.map((r) => esc(r.jmeno)).join(", ")} – doplňte ve Frontě (✎).</div>` : ""}
     ${Object.keys(OBJ_EMAIL).filter((t) => t === "MR" || nove(t).length).map((t) => `<button class="primary full" data-act="zadost" data-v="${t}" ${nove(t).length ? "" : "disabled"} style="margin-top:10px">✉︎ Připravit mail pro ${OBJ_KOMU[t]} (${nove(t).length})</button>`).join("")}
@@ -873,7 +873,7 @@ app.addEventListener("click", async (e) => {
   if (act === "vytahni") return vytahni();
   if (act === "zadost") {
     const typ = b.dataset.v;
-    const rows = cekajici(typ).filter((r) => S.vybrano.has(r.id) && !r.zadost_at && r.zadanka_at);
+    const rows = cekajici(typ).filter((r) => S.vybrano.has(r.id) && !r.zadost_at);
     if (!rows.length) return;
     b.disabled = true; b.textContent = "Připravuji koncept…";
     const { predmet, telo } = mailProRecepci(rows, typ);
