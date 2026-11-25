@@ -723,6 +723,7 @@ function skupinyPacientu(list) {
   }
   return [...m.values()].map((rows) => rows.sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas)));
 }
+const gmailKonceptUrl = (rows) => { const m = rows.find((x) => x.gmail_message_id)?.gmail_message_id; return m ? `https://mail.google.com/mail/u/0/#drafts?compose=${m}` : null; };
 const gmailKonceptyUrl = () => (isIOS() ? "googlegmail://" : "https://mail.google.com/mail/u/0/#drafts");
 
 async function volejGmail(body) {
@@ -804,7 +805,7 @@ function viewTerminy() {
     const ids = rows.map((r) => r.id).join(",");
     return `<div class="item"><div class="grow">
         <b>${esc([...new Set(rows.map((r) => r.jmeno))].join(", "))}</b> <small>${email ? esc(email) : "bez příjemce"}</small>
-        ${terminyLi(rows, false)}</div>
+        ${terminyLi(rows, false)}${gmailKonceptUrl(rows) ? `<div style="margin-top:6px"><a href="${gmailKonceptUrl(rows)}" target="_blank" rel="noopener">✉︎ Otevřít tento koncept</a></div>` : ""}</div>
       <button class="ghost" data-act="odeslano" data-ids="${ids}" title="Označit jako odeslané">✓</button></div>`;
   }).join("");
 
@@ -825,7 +826,7 @@ function viewTerminy() {
   <div class="card">
     ${kon.length ? kartyKon : `<div class="empty">Žádné koncepty k odeslání.</div>`}
     ${kon.length ? `<div class="grid2" style="margin-top:10px">
-      <a class="btn primary" href="${gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Otevřít Gmail</a>
+      <a class="btn primary" href="${(kon.length === 1 && gmailKonceptUrl(kon[0])) || gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Otevřít ${kon.length === 1 ? "koncept" : "Gmail"}</a>
       <button data-act="kontrola">↻ Zkontrolovat odeslání</button></div>
       <small>Po odeslání v Gmailu se stav změní sám${cas ? ` · kontrolováno ${cas}` : ""}.</small>` : ""}
   </div>
