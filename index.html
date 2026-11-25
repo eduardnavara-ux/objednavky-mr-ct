@@ -255,7 +255,7 @@ function sestavMail(rows) {
   const r = [...rows].sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
   const predmet = "termín " + r.map((x) => genitivPredmet(x.vykon)).join(" a ");
   const vety = r.map((x, i) =>
-    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}. ${TEL[x.typ] ? `Pro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
+    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}.${TEL[x.typ] ? `\nPro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
   if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += " Po absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
   const pozn = [...new Set(r.map((x) => (x.poznamka_mail || "").trim()).filter(Boolean))];
   const telo = `Dobrý den,\n\n${vety.join("\n\n")}${pozn.length ? "\n\n" + pozn.join("\n\n") : ""}\n\nS pozdravem,\nNavara`;
@@ -311,7 +311,7 @@ const cekajici = (typ) => S.rows.filter((r) => r.stav === "ceka" && (!typ || r.t
 function render() {
   if (!S.user) { app.innerHTML = viewLogin(); return; }
   const nCeka = cekajici().length;
-  const nMail = S.rows.filter((r) => r.stav === "objednano" || r.stav === "koncept").length;
+  const nMail = S.rows.filter((r) => (r.stav === "objednano" && r.termin_datum) || r.stav === "koncept").length;
   app.innerHTML = `
   <header>
     <div class="top"><h1>Objednávky MR / CT</h1><button class="who" data-act="odhlasit">Odhlásit</button></div>
@@ -384,11 +384,11 @@ function vyslHledani() {
 }
 const mailem = (r) => r.typ === "MR" || r.typ === "PET";
 function faze(r) {
-  if (r.stav !== "ceka") return { g: "hotovo", t: r.stav === "mail_odeslan" ? "pacient vyrozuměn" : r.stav === "koncept" ? "koncept mailu pacientovi" : "termín objednán" };
+  if (r.stav !== "ceka") return { g: "hotovo", t: r.typ === "NEU" && r.stav === "objednano" ? "vyřízeno osobně" : r.stav === "mail_odeslan" ? "pacient vyrozuměn" : r.stav === "koncept" ? "koncept mailu pacientovi" : "termín objednán" };
   if (!r.kartoteka) return r.registrace_predano_at ? { g: "ceka", t: "čeká na potvrzení registrace", krok: "potvrdit" } : { g: "akce", t: "předat kartotéce", krok: "predat" };
   if (!r.zadanka_at) return { g: "akce", t: "vytvořit žádanku", krok: "zadanka" };
   if (r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna)) return { g: "ceka", t: "čeká na RČ a pojišťovnu od pacienta" };
-  if (r.typ === "NEU") return { g: "akce", t: "vyřídit osobně" };
+  if (r.typ === "NEU") return { g: "akce", t: "vyřídit osobně", krok: "kb" };
   if (!mailem(r)) return { g: "akce", t: "objednat telefonicky", krok: "telefon" };
   if (!r.zadost_at) return { g: "akce", t: "objednat u recepce", krok: "objednat" };
   return { g: "ceka", t: "čeká na termín od recepce" };
@@ -435,7 +435,7 @@ function viewDetail() {
   if (!r) return "";
   const f = faze(r), h = historie(r);
   const rad = (l, v) => v ? `<div class="data-row"><span class="data-label">${l}</span><span class="data-value">${v}</span></div>` : "";
-  const krok = { predat: ["predano1", "Označit jako předáno kartotéce"], potvrdit: ["regpotvrzena", "Registrace potvrzena"], zadanka: ["zadanka", "Žádanka hotová"], objednat: ["kobjednavce", "Přejít na Objednávku"], telefon: ["terminulozit", "Uložit termín (objednáno)"] }[f.krok];
+  const krok = { predat: ["predano1", "Označit jako předáno kartotéce"], potvrdit: ["regpotvrzena", "Registrace potvrzena"], zadanka: ["zadanka", "Žádanka hotová"], objednat: ["kobjednavce", "Přejít na Objednávku"], telefon: ["terminulozit", "Uložit termín (objednáno)"], kb: ["kbvyrizeno", "KB vyřízeno osobně"] }[f.krok];
   return `<div class="sheet-bg" data-act="zavritdetail"></div><div class="sheet" role="dialog" aria-label="Detail pacienta">
     <div class="sheet-handle"></div>
     <div class="sheet-head"><div><h2>${esc(r.jmeno)}</h2><div class="sheet-sub">${esc(vykonZobraz(r.vykon))}${r.termin_datum ? ` · ${fmtDatum(r.termin_datum)} ${esc((r.termin_cas || "").slice(0, 5))}` : ""}</div></div><button class="ghost" data-act="zavritdetail" aria-label="Zavřít">✕</button></div>
@@ -543,7 +543,7 @@ function itemFronta(r) {
 const vykonZobraz = (v) => /kaud[aá]ln/i.test(v || "") ? "KB" : (v || "");
 const kdyz = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
 const klicPac = (r) => norm(r.jmeno) + "|" + (r.datum_narozeni || "");
-const historie = (r) => [[r.created_at, "Přidán do fronty"], [r.registrace_predano_at, "Seznam předán kartotéce"], [r.registrace_potvrzena_at, "Registrace potvrzena"], [r.doplneni_at, "Požádán o RČ a pojišťovnu"], [r.zadanka_at, "Žádanka vytvořena"], [r.zadost_at, "Žádost recepci (koncept)"], [r.objednano_at, "Termín objednán"], [r.koncept_at, "Koncept mailu pacientovi"], [r.mail_odeslan_at, "Mail pacientovi odeslán"]].filter((x) => x[0]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+const historie = (r) => [[r.created_at, "Přidán do fronty"], [r.registrace_predano_at, "Seznam předán kartotéce"], [r.registrace_potvrzena_at, "Registrace potvrzena"], [r.doplneni_at, "Požádán o RČ a pojišťovnu"], [r.zadanka_at, "Žádanka vytvořena"], [r.zadost_at, "Žádost recepci (koncept)"], [r.objednano_at, r.typ === "NEU" ? "KB vyřízeno osobně" : "Termín objednán"], [r.koncept_at, "Koncept mailu pacientovi"], [r.mail_odeslan_at, "Mail pacientovi odeslán"]].filter((x) => x[0]).sort((a, b) => a[0] < b[0] ? -1 : 1);
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
 function viewZeZpravy() {
@@ -981,6 +981,11 @@ app.addEventListener("click", async (e) => {
   if (act === "detail") { S.detailId = b.dataset.id; render(); return; }
   if (act === "zavritdetail") { S.detailId = null; render(); return; }
   if (act === "upravitdetail") { S.editId = b.dataset.id; S.detailId = null; render(); return; }
+  if (act === "kbvyrizeno") {
+    const { error } = await sb.from("objednavky").update({ stav: "objednano", objednano_at: new Date().toISOString() }).eq("id", b.dataset.id);
+    if (error) { toast("Uložení selhalo: " + error.message); return; }
+    S.detailId = null; await nacti(); render(); toast("KB označeno jako vyřízené"); return;
+  }
   if (act === "terminulozit") {
     const d = document.getElementById("tdat")?.value, c = document.getElementById("tcas")?.value, m = document.getElementById("tmisto")?.value || "4p";
     if (!d || !c) { toast("Doplňte datum a čas"); return; }
