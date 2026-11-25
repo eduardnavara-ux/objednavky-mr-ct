@@ -254,8 +254,15 @@ function vykonVeVete(v) {
 function sestavMail(rows) {
   const r = [...rows].sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
   const predmet = "termín " + r.map((x) => genitivPredmet(x.vykon)).join(" a ");
-  const vety = r.map((x, i) =>
-    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}.${TEL[x.typ] ? `\nPro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
+  const videno = new Set();
+  const vety = r.map((x, i) => {
+    const stejneMisto = i > 0 && r.slice(0, i).some((y) => y.misto === x.misto);
+    const kratke = String(x.misto || "").replace(/^Nemocnice Na Homolce,\s*/, "").replace(/,\s*při spodní vrátnici$/, "");
+    const misto = stejneMisto ? `taktéž ${kratke}` : x.misto;
+    const tel = TEL[x.typ] && !videno.has(TEL[x.typ]) ? `\nPro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : "";
+    if (TEL[x.typ]) videno.add(TEL[x.typ]);
+    return `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${misto}.${tel}`.trim();
+  });
   if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += "\n\nPo absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
   const pozn = [...new Set(r.map((x) => (x.poznamka_mail || "").trim()).filter(Boolean))];
   const telo = `Dobrý den,\n\n${vety.join("\n\n")}${pozn.length ? "\n\n" + pozn.join("\n\n") : ""}\n\nS pozdravem,\nNavara`;
