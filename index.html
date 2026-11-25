@@ -287,11 +287,19 @@ function viewFronta() {
       <button class="primary full">Přidat do fronty</button>
     </form>
   </div>
+  <div class="card"><input id="hledej" placeholder="🔍 Najít pacienta (i už objednaného)" value="${esc(S.hledej || "")}" autocomplete="off"><div id="hledej-vysl">${vyslHledani()}</div></div>
   ${viewRegistrace()}
   ${sekce("MR")}${sekce("CT")}${cekajici("NEU").length ? sekce("NEU") : ""}${cekajici("PET").length ? sekce("PET") : ""}
   ${S.rows.some((r) => r.stav === "ceka" && !r.kartoteka) ? `<small>Kartotéka Homolka (registrace, pojišťovna): <a href="${telHref(KARTOTEKA_TEL)}">257 272 522</a></small>` : ""}`;
 }
 
+function vyslHledani() {
+  const q = norm(S.hledej || ""); if (q.length < 2) return "";
+  const nalez = S.rows.filter((r) => norm(r.jmeno).includes(q));
+  const stavy = { ceka: "čeká", objednano: "objednáno", koncept: "koncept mailu", mail_odeslan: "mail odeslán" };
+  return nalez.length ? nalez.map((r) => `<div class="item"><div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(vykonZobraz(r.vykon))}</span> <span class="tag">${stavy[r.stav] || esc(r.stav)}</span>${r.termin_datum ? ` <small>${fmtDatum(r.termin_datum)} ${esc(r.termin_cas || "")} ${esc(mistoKratce(r.misto))}</small>` : ""}<br>
+    <small>RČ: ${r.rodne_cislo ? `<b>${esc(r.rodne_cislo)}</b> <button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px">⧉</button>` : "–"} · pojišťovna: ${esc(r.pojistovna) || "–"}${r.adresa ? " · " + esc(r.adresa) : ""}${r.telefon ? ` · ${esc(r.telefon)}` : ""}${r.email ? " · " + esc(r.email) : ""}</small></div></div>`).join("") : `<div class="empty">Nikdo takový v aplikaci není.</div>`;
+}
 function neregistrovani() {
   const m = new Map();
   S.rows.filter((r) => r.stav === "ceka" && !r.kartoteka).forEach((r) => { const k = klicPac(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
@@ -950,6 +958,7 @@ app.addEventListener("click", async (e) => {
 app.addEventListener("input", (e) => {
   const t = e.target;
   if (t.id === "prepis") { S.prepis = t.value; return; }
+  if (t.id === "hledej") { S.hledej = t.value; const o = document.getElementById("hledej-vysl"); if (o) o.innerHTML = vyslHledani(); return; }
   if (t.dataset.z !== undefined && t.type !== "checkbox") { S.zpravy.polozky[+t.dataset.z][t.dataset.k] = t.value; return; }
   if (t.dataset.i !== undefined && t.type !== "checkbox" && t.tagName !== "SELECT") {
     S.vysledek.terminy[+t.dataset.i][t.dataset.k] = t.value;
