@@ -389,7 +389,7 @@ function faze(r) {
   if (!r.zadanka_at) return { g: "akce", t: "vytvořit žádanku", krok: "zadanka" };
   if (r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna)) return { g: "ceka", t: "čeká na RČ a pojišťovnu od pacienta" };
   if (r.typ === "NEU") return { g: "akce", t: "vyřídit osobně" };
-  if (!mailem(r)) return { g: "akce", t: "objednat telefonicky" };
+  if (!mailem(r)) return { g: "akce", t: "objednat telefonicky", krok: "telefon" };
   if (!r.zadost_at) return { g: "akce", t: "objednat u recepce", krok: "objednat" };
   return { g: "ceka", t: "čeká na termín od recepce" };
 }
@@ -435,7 +435,7 @@ function viewDetail() {
   if (!r) return "";
   const f = faze(r), h = historie(r);
   const rad = (l, v) => v ? `<div class="data-row"><span class="data-label">${l}</span><span class="data-value">${v}</span></div>` : "";
-  const krok = { predat: ["predano1", "Označit jako předáno kartotéce"], potvrdit: ["regpotvrzena", "Registrace potvrzena"], zadanka: ["zadanka", "Žádanka hotová"], objednat: ["kobjednavce", "Přejít na Objednávku"] }[f.krok];
+  const krok = { predat: ["predano1", "Označit jako předáno kartotéce"], potvrdit: ["regpotvrzena", "Registrace potvrzena"], zadanka: ["zadanka", "Žádanka hotová"], objednat: ["kobjednavce", "Přejít na Objednávku"], telefon: ["terminulozit", "Uložit termín (objednáno)"] }[f.krok];
   return `<div class="sheet-bg" data-act="zavritdetail"></div><div class="sheet" role="dialog" aria-label="Detail pacienta">
     <div class="sheet-handle"></div>
     <div class="sheet-head"><div><h2>${esc(r.jmeno)}</h2><div class="sheet-sub">${esc(vykonZobraz(r.vykon))}${r.termin_datum ? ` · ${fmtDatum(r.termin_datum)} ${esc((r.termin_cas || "").slice(0, 5))}` : ""}</div></div><button class="ghost" data-act="zavritdetail" aria-label="Zavřít">✕</button></div>
@@ -452,6 +452,9 @@ function viewDetail() {
         ${rad("Poznámka pro mě", esc(r.poznamka))}
         ${rad("Do mailu pacientovi", esc(r.poznamka_mail))}
       </div>
+      ${f.krok === "telefon" ? `<div class="card" style="margin-bottom:12px"><div class="detail-h" style="margin-top:0">Termín od recepce (telefonicky)</div>
+        <div class="grid2"><div><label class="f">Datum</label><input type="date" id="tdat"></div><div><label class="f">Čas</label><input type="time" id="tcas"></div></div>
+        <label class="f">Místo</label><select id="tmisto"><option value="4p">4. patro (CT)</option><option value="gama">budova Gama</option><option value="2p">2. patro (sály)</option></select></div>` : ""}
       <div class="detail-h">Postup</div>
       <ul class="timeline">${h.map(([t, n]) => `<li class="done"><span class="tl-dot"></span><b>${n}</b><small>${kdyz(t)} ${new Date(t).toTimeString().slice(0, 5)}</small></li>`).join("")}${f.g !== "hotovo" ? `<li class="now"><span class="tl-dot"></span><b>${esc(f.t)}</b></li>` : ""}</ul>
     </div>
@@ -978,6 +981,13 @@ app.addEventListener("click", async (e) => {
   if (act === "detail") { S.detailId = b.dataset.id; render(); return; }
   if (act === "zavritdetail") { S.detailId = null; render(); return; }
   if (act === "upravitdetail") { S.editId = b.dataset.id; S.detailId = null; render(); return; }
+  if (act === "terminulozit") {
+    const d = document.getElementById("tdat")?.value, c = document.getElementById("tcas")?.value, m = document.getElementById("tmisto")?.value || "4p";
+    if (!d || !c) { toast("Doplňte datum a čas"); return; }
+    const { error } = await sb.from("objednavky").update({ stav: "objednano", termin_datum: d, termin_cas: c, misto: MISTA[m], objednano_at: new Date().toISOString() }).eq("id", b.dataset.id);
+    if (error) { toast("Uložení selhalo: " + error.message); return; }
+    S.detailId = null; await nacti(); render(); toast("Termín uložen – mail pacientovi připravíte v Termínech"); return;
+  }
   if (act === "kobjednavce") { S.detailId = null; S.tab = "hovor"; S.vybrano = null; render(); window.scrollTo(0, 0); return; }
   if (["predano1", "regpotvrzena", "zadanka"].includes(act)) {
     const x = S.rows.find((q) => q.id === b.dataset.id); if (!x) return;
