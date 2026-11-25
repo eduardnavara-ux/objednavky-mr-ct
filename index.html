@@ -61,6 +61,10 @@
   .seg { display: flex; background: #eef3f8; border-radius: 10px; padding: 3px; }
   .seg button { flex: 1; border: 0; background: transparent; padding: 8px; }
   .seg button.on { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .item[data-form] { background: #f4f8fc; border: 2px solid var(--navy-2); border-radius: 14px; padding: 12px; margin: 10px 0; }
+  .item[data-form]::before { content: "Úprava pacienta"; display: block; font-weight: 700; color: var(--navy-2); margin-bottom: 8px; }
+  input, select, textarea { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  input[type="date"] { -webkit-appearance: none; appearance: none; text-align: left; min-height: 44px; }
   .item { display: flex; gap: 8px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
   .item:first-of-type { border-top: 0; }
   .item .grow { min-width: 0; }
@@ -166,7 +170,8 @@ function sestavMail(rows) {
   const vety = r.map((x, i) =>
     `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}. ${TEL[x.typ] ? `Pro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
   if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += " Po absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
-  const telo = `Dobrý den,\n\n${vety.join("\n\n")}\n\nS pozdravem,\nNavara`;
+  const pozn = [...new Set(r.map((x) => (x.poznamka_mail || "").trim()).filter(Boolean))];
+  const telo = `Dobrý den,\n\n${vety.join("\n\n")}${pozn.length ? "\n\n" + pozn.join("\n\n") : ""}\n\nS pozdravem,\nNavara`;
   return { predmet, telo };
 }
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -283,7 +288,8 @@ function viewFronta() {
       <div class="chips">${RYCHLE.map((v) => `<button type="button" class="chip" data-act="rychly" data-v="${esc(v)}">${esc(v.trim())}</button>`).join("")}</div>
       <input name="adresa" placeholder="Adresa (nepovinné)" style="margin-top:8px">
       <input name="vykon" id="vykon" placeholder="Výkon – např. MR Lp, PRT C6 vpravo" required>
-      <input name="poznamka" placeholder="Poznámka (nepovinné)" style="margin-top:8px">
+      <input name="poznamka" placeholder="Poznámka pro mě (nepovinné)" style="margin-top:8px">
+      <input name="poznamka_mail" placeholder="Poznámka do mailu pacientovi (nepovinné)" style="margin-top:8px">
       <button class="primary full">Přidat do fronty</button>
     </form>
   </div>
@@ -334,7 +340,8 @@ function itemFronta(r) {
     return `<form class="item" data-form="upravit" data-id="${r.id}" style="display:block">
       <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="datum_narozeni" type="date" value="${esc(r.datum_narozeni)}" title="Datum narození"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"><input name="telefon" value="${esc(r.telefon)}" placeholder="Telefon" inputmode="tel"></div>
-      <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
+      <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka (jen pro mě)"></div>
+      <textarea name="poznamka_mail" rows="3" placeholder="Poznámka do mailu pacientovi (přijde jen jemu)" style="margin-top:8px">${esc(r.poznamka_mail)}</textarea>
       <div class="grid2 resp" style="margin-top:8px"><input name="adresa" value="${esc(r.adresa)}" placeholder="Adresa (Ulice č., PSČ Obec)" style="grid-column:1/-1"><input name="rodne_cislo" value="${esc(r.rodne_cislo)}" placeholder="Rodné číslo (nepovinné)" inputmode="numeric" autocomplete="off"><input name="pojistovna" value="${esc(r.pojistovna)}" placeholder="Pojišťovna (nepovinné)" autocomplete="off"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
       <span class="grow"></span><button type="button" class="ghost" data-act="smazat" data-id="${r.id}">Smazat</button></div>
@@ -354,7 +361,7 @@ function itemFronta(r) {
       ${stavReg} ${stavZad}<br>
       ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}
       ${r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna) ? `<span class="tag" style="background:#fff4e0;color:#8a5a00">✉︎ čekám na RČ a pojišťovnu od pacienta</span><br>` : ""}
-      ${r.rodne_cislo || r.pojistovna ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">RČ ${r.rodne_cislo ? `<button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px;font:inherit" aria-label="Zkopírovat rodné číslo">${esc(r.rodne_cislo)} ⧉</button>` : "–"} · ${esc(r.pojistovna) || "pojišťovna –"}</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.adresa ? " · " + esc(r.adresa) : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small>
+      ${r.rodne_cislo || r.pojistovna ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">RČ ${r.rodne_cislo ? `<button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px;font:inherit" aria-label="Zkopírovat rodné číslo">${esc(r.rodne_cislo)} ⧉</button>` : "–"} · ${esc(r.pojistovna) || "pojišťovna –"}</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.adresa ? " · " + esc(r.adresa) : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small>${r.poznamka_mail ? `<br><span class="tag" style="background:#e8f0fe;color:#1a56b0;white-space:normal">✉︎ do mailu: ${esc(r.poznamka_mail)}</span>` : ""}
       <details style="margin-top:4px"><summary><small>Historie (${hist.length})</small></summary><small>${hist.map(([t, n]) => `${kdyz(t)} ${new Date(t).toTimeString().slice(0, 5)} – ${n}`).join("<br>")}</small></details></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
@@ -767,7 +774,7 @@ app.addEventListener("submit", async (e) => {
   }
   if (kind === "pridat") {
     const vykon = fd.vykon.trim();
-    const row = { jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, adresa: (fd.adresa || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
+    const row = { jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, adresa: (fd.adresa || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, poznamka_mail: (fd.poznamka_mail || "").trim() || null };
     const { error } = await sb.from("objednavky").insert(row);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
     await nacti(); S.vybrano = null; render(); toast("Přidáno do fronty");
@@ -790,7 +797,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, adresa: (fd.adresa || "").trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
+      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, poznamka_mail: (fd.poznamka_mail || "").trim() || null, adresa: (fd.adresa || "").trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
