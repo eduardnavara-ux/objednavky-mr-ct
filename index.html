@@ -175,9 +175,9 @@
   .status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
   .status.orange { color: var(--warn); background: var(--warn-bg); } .status.blue { color: var(--blue); background: var(--blue-bg); } .status.green { color: var(--ok); background: var(--ok-bg); }
   .patient-hint { color: var(--muted); font-size: 11px; text-align: right; font-weight: 400; }
-  .batch-action { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+  .batch-action { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-top: 10px; }
   .batch-info { font-size: 11px; color: var(--muted); } .batch-info strong { display: block; font-size: 12px; color: var(--navy); font-weight: 600; }
-  .batch-button { min-height: 44px; padding: 8px 12px; background: #edf2f6; color: var(--navy); border: 0; border-radius: 8px; font-size: 12px; font-weight: 600; }
+  .batch-button { min-height: 50px; padding: 10px 14px; background: var(--navy); color: #fff; border: 0; border-radius: 10px; font-size: 15px; font-weight: 700; width: 100%; box-shadow: 0 2px 6px rgba(41,71,93,.25); } .batch-button:disabled { background: #c9d3da; box-shadow: none; }
   .papir { background: #fff; box-shadow: 0 3px 14px rgba(0,0,0,.12); border: 0; padding: 18px; }
 </style>
 </head>
@@ -416,7 +416,7 @@ function viewSkupiny() {
     let batch = "";
     if (k === "MR" || k === "PET") {
       const hotovo = l.filter((x) => x.zadanka_at && x.kartoteka).length, nelze = l.length - hotovo;
-      batch = `<div class="batch-action"><div class="batch-info"><strong>${hotovo} ${cesky(hotovo, "pacient připraven", "pacienti připraveni", "pacientů připraveno")}</strong>${nelze ? `${nelze} zatím nelze objednat (bez žádanky)` : "všichni jsou v konceptu"}</div>
+      batch = `<div class="batch-action"><div class="batch-info"><strong>${hotovo} ${cesky(hotovo, "pacient připraven", "pacienti připraveni", "pacientů připraveno")}</strong>${nelze ? `${nelze} zatím nelze objednat (bez žádanky)` : "všichni mají žádanku"}</div>
         <button class="batch-button" data-act="zadost" data-v="${k}" ${hotovo ? "" : "disabled"}>✉︎ Koncept ${k} (${hotovo})</button></div>`;
     }
     return `<section class="section"><div class="section-heading"><h2>${nazev}</h2><span class="section-count">${l.length}</span>${poznamky[k] ? `<span class="section-note">${poznamky[k]}</span>` : ""}</div><div class="patient-list">${l.map(kartaPac).join("")}</div>${batch}</section>`;
@@ -625,17 +625,6 @@ function viewHovor() {
   const nMR = list.filter((r) => r.typ === "MR").length, nCT = list.filter((r) => r.typ === "CT").length;
   const nVyb = list.filter((r) => S.vybrano.has(r.id)).length;
   return `
-  <div class="card">
-    <div class="row between"><h2 style="margin:0">Čeká na objednání: ${list.length}</h2><small>MR ${nMR} · CT ${nCT}</small></div>
-    ${list.length ? `<details><summary>Kdo se objednává (${nVyb} vybráno)</summary>
-      ${list.map((r) => `<label class="chk"><input type="checkbox" data-sel="${r.id}" ${S.vybrano.has(r.id) ? "checked" : ""}>
-        <span><b>${esc(r.jmeno)}</b> <span class="tag">${esc(r.vykon)}</span></span></label>`).join("")}
-    </details>` : `<div class="empty">Ve frontě nikdo není – termíny se uloží jako noví pacienti.</div>`}
-    <div class="grid2" style="margin-top:12px">
-      <div><small>Recepce MR</small><br><a class="cislo" href="${telHref(cislo("MR"))}">${esc(cislo("MR"))}</a></div>
-      <div><small>Recepce CT</small><br><a class="cislo" href="${telHref(cislo("CT"))}">${esc(cislo("CT"))}</a></div>
-    </div>
-  </div>
   ${viewEmailObjednani(list)}
   <div class="card">
     ${S.nahrava
