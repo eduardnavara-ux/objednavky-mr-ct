@@ -116,7 +116,7 @@ const MISTA = {
   "4p": "Nemocnice Na Homolce, 4.patro",
   "pet": "Nemocnice Na Homolce, PET centrum (není součástí hlavní budovy)",
 };
-const MISTA_KRATCE = { "2p": "2. patro", "gama": "Gama", "4p": "4. patro", "pet": "PET centrum" };
+const MISTA_KRATCE = { "2p": "2. patro", "gama": "budova Gama", "4p": "4. patro", "pet": "PET centrum" };
 const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT ", "kaudální blok", "PET s NaF"];
 // Konverzace v Claude, kde se diktuje hovor (stále stejná, ať nevznikají nové)
 // Objednání e-mailem (místo telefonu)
@@ -281,37 +281,82 @@ function viewFronta() {
         <input name="telefon" placeholder="Telefon (nepovinné)" inputmode="tel">
       </div>
       <div class="chips">${RYCHLE.map((v) => `<button type="button" class="chip" data-act="rychly" data-v="${esc(v)}">${esc(v.trim())}</button>`).join("")}</div>
+      <input name="adresa" placeholder="Adresa (nepovinné)" style="margin-top:8px">
       <input name="vykon" id="vykon" placeholder="Výkon – např. MR Lp, PRT C6 vpravo" required>
       <input name="poznamka" placeholder="Poznámka (nepovinné)" style="margin-top:8px">
       <button class="primary full">Přidat do fronty</button>
     </form>
   </div>
+  ${viewRegistrace()}
   ${sekce("MR")}${sekce("CT")}${cekajici("NEU").length ? sekce("NEU") : ""}${cekajici("PET").length ? sekce("PET") : ""}
   ${S.rows.some((r) => r.stav === "ceka" && !r.kartoteka) ? `<small>Kartotéka Homolka (registrace, pojišťovna): <a href="${telHref(KARTOTEKA_TEL)}">257 272 522</a></small>` : ""}`;
 }
 
+function neregistrovani() {
+  const m = new Map();
+  S.rows.filter((r) => r.stav === "ceka" && !r.kartoteka).forEach((r) => { const k = klicPac(r); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+  return [...m.values()];
+}
+function viewRegistrace() {
+  const sk = neregistrovani();
+  if (!sk.length) return "";
+  const nePredano = sk.filter((g) => g.some((r) => !r.registrace_predano_at)).length;
+  return `<div class="card">
+    <h2 style="margin:0 0 4px">Registrace v kartotéce – ${sk.length}</h2>
+    <small>${nePredano ? `K předání: ${nePredano}.` : "Vše předáno, čeká se na potvrzení."} Vytiskněte seznam, odneste kartotéce a požádejte o e-mailové potvrzení.</small>
+    <div class="grid2" style="margin-top:8px"><button class="primary" data-act="tiskkartoteka">🖨 Vytisknout seznam</button>
+    <button data-act="predano" ${nePredano ? "" : "disabled"}>Označit jako předáno</button></div>
+  </div>`;
+}
+function tiskKartoteka() {
+  const sk = neregistrovani().map((g) => ({ ...g[0], vykony: g.map((r) => vykonZobraz(r.vykon)).join(", ") }));
+  const bl = (v) => v ? esc(v) : "…………………………";
+  const radky = sk.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.jmeno)}</b><br>nar. ${r.datum_narozeni ? fmtDatum(r.datum_narozeni) : "…………"}<br>RČ: ${bl(r.rodne_cislo)}<br>poj.: ${bl(r.pojistovna)}</td><td>${bl(r.adresa)}<br>tel.: ${bl(r.telefon)}<br>e-mail: ${bl(r.email)}</td><td>${esc(r.vykony)}</td></tr>`).join("");
+  const w = window.open("", "_blank");
+  if (!w) { toast("Povolte vyskakovací okno"); return; }
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Registrace pacientů</title><style>body{font:13px Arial,sans-serif;margin:18mm}table{border-collapse:collapse;width:100%}td,th{border:1px solid #444;padding:5px;vertical-align:top;text-align:left}h1{font-size:17px}</style>
+<h1>Žádost o registraci pacientů – ${new Date().toLocaleDateString("cs-CZ")}</h1>
+<table><tr><th>#</th><th>Pacient</th><th>Kontakt</th><th>Výkon</th></tr>${radky}</table>
+<p style="margin-top:18px">Prosím o registraci uvedených pacientů a o <b>e-mailové potvrzení dokončení registrace</b> na adresu <b>eduard.navara@gmail.com</b>.</p>
+<p style="margin-top:30px">MUDr. Eduard Navara, oddělení neurochirurgie</p><script>window.onload=()=>window.print()<\/script>`);
+  w.document.close();
+}
 function itemFronta(r) {
   if (S.editId === r.id) {
     return `<form class="item" data-form="upravit" data-id="${r.id}" style="display:block">
       <div class="grid2 resp"><input name="jmeno" value="${esc(r.jmeno)}" required><input name="datum_narozeni" type="date" value="${esc(r.datum_narozeni)}" title="Datum narození"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="email" type="email" value="${esc(r.email)}" placeholder="E-mail"><input name="telefon" value="${esc(r.telefon)}" placeholder="Telefon" inputmode="tel"></div>
       <div class="grid2 resp" style="margin-top:8px"><input name="vykon" value="${esc(r.vykon)}" required><input name="poznamka" value="${esc(r.poznamka)}" placeholder="Poznámka"></div>
-      <div class="grid2 resp" style="margin-top:8px"><input name="rodne_cislo" value="${esc(r.rodne_cislo)}" placeholder="Rodné číslo (nepovinné)" inputmode="numeric" autocomplete="off"><input name="pojistovna" value="${esc(r.pojistovna)}" placeholder="Pojišťovna (nepovinné)" autocomplete="off"></div>
+      <div class="grid2 resp" style="margin-top:8px"><input name="adresa" value="${esc(r.adresa)}" placeholder="Adresa (Ulice č., PSČ Obec)" style="grid-column:1/-1"><input name="rodne_cislo" value="${esc(r.rodne_cislo)}" placeholder="Rodné číslo (nepovinné)" inputmode="numeric" autocomplete="off"><input name="pojistovna" value="${esc(r.pojistovna)}" placeholder="Pojišťovna (nepovinné)" autocomplete="off"></div>
       <div class="row" style="margin-top:8px"><button class="primary">Uložit</button><button type="button" data-act="zrusedit">Zpět</button>
       <span class="grow"></span><button type="button" class="ghost" data-act="smazat" data-id="${r.id}">Smazat</button></div>
     </form>`;
   }
+  const hist = historie(r);
+  const stavReg = r.kartoteka
+    ? `<button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;background:#e7f5ee;color:#1f7a4d">✓ v kartotéce</button>`
+    : r.registrace_predano_at
+      ? `<button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;background:#e8f0fe;color:#1a56b0">⏳ předáno kartotéce ${kdyz(r.registrace_predano_at)} – potvrdit registraci</button>`
+      : `<button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;background:#fdecea;color:#b42318">✗ neregistrován</button>`;
+  const stavZad = r.zadanka_at
+    ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✓ žádanka</span>`
+    : r.kartoteka ? `<button class="tag" data-act="zadanka" data-id="${r.id}" style="border:0;cursor:pointer;background:#fff4e0;color:#8a5a00">Žádanka hotová?</button>` : "";
   return `<div class="item">
-    <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(r.vykon)}</span>
-      <button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;${r.kartoteka ? "background:#e7f5ee;color:#1f7a4d" : "background:#fdecea;color:#b42318"}">${r.kartoteka ? "✓ v kartotéce" : "✗ neregistrován"}</button><br>
+    <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(vykonZobraz(r.vykon))}</span>
+      ${stavReg} ${stavZad}<br>
       ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}
       ${r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna) ? `<span class="tag" style="background:#fff4e0;color:#8a5a00">✉︎ čekám na RČ a pojišťovnu od pacienta</span><br>` : ""}
-      ${r.rodne_cislo || r.pojistovna ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">RČ ${r.rodne_cislo ? `<button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px;font:inherit" aria-label="Zkopírovat rodné číslo">${esc(r.rodne_cislo)} ⧉</button>` : "–"} · ${esc(r.pojistovna) || "pojišťovna –"}</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
+      ${r.rodne_cislo || r.pojistovna ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">RČ ${r.rodne_cislo ? `<button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px;font:inherit" aria-label="Zkopírovat rodné číslo">${esc(r.rodne_cislo)} ⧉</button>` : "–"} · ${esc(r.pojistovna) || "pojišťovna –"}</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.adresa ? " · " + esc(r.adresa) : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small>
+      <details style="margin-top:4px"><summary><small>Historie (${hist.length})</small></summary><small>${hist.map(([t, n]) => `${kdyz(t)} ${new Date(t).toTimeString().slice(0, 5)} – ${n}`).join("<br>")}</small></details></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
   </div>`;
 }
 
+const vykonZobraz = (v) => /kaud[aá]ln/i.test(v || "") ? "KB" : (v || "");
+const kdyz = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
+const klicPac = (r) => norm(r.jmeno) + "|" + (r.datum_narozeni || "");
+const historie = (r) => [[r.created_at, "Přidán do fronty"], [r.registrace_predano_at, "Seznam předán kartotéce"], [r.registrace_potvrzena_at, "Registrace potvrzena"], [r.doplneni_at, "Požádán o RČ a pojišťovnu"], [r.zadanka_at, "Žádanka vytvořena"], [r.zadost_at, "Žádost recepci (koncept)"], [r.objednano_at, "Termín objednán"], [r.koncept_at, "Koncept mailu pacientovi"], [r.mail_odeslan_at, "Mail pacientovi odeslán"]].filter((x) => x[0]).sort((a, b) => a[0] < b[0] ? -1 : 1);
 const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
 
 function viewZeZpravy() {
@@ -328,12 +373,14 @@ function viewZeZpravy() {
         <div class="grid2 resp" style="margin-top:8px">
           <input data-z="${i}" data-k="email" value="${esc(p.email)}" placeholder="E-mail" type="email" inputmode="email">
           <input data-z="${i}" data-k="telefon" value="${esc(p.telefon)}" placeholder="Telefon" inputmode="tel"></div>
+        <input data-z="${i}" data-k="adresa" value="${esc(p.adresa)}" placeholder="Adresa" style="margin-top:8px">
         <div class="grid2 resp" style="margin-top:8px">
           <input data-z="${i}" data-k="vykon" value="${esc(p.vykon)}" placeholder="Výkon">
           <input data-z="${i}" data-k="poznamka" value="${esc(p.poznamka)}" placeholder="Poznámka"></div>
         ${p.duplicita ? `<div class="warn">⚠︎ Stejný pacient s tímto výkonem už ve frontě čeká.</div>` : ""}
         ${!p.email ? `<div class="warn">⚠︎ Na zprávě jsem nenašel e-mail.</div>` : ""}
         ${!p.datum_narozeni ? `<div class="warn">⚠︎ Chybí datum narození.</div>` : ""}
+        ${!p.adresa ? `<div class="warn">⚠︎ Chybí adresa (potřebná pro kartotéku).</div>` : ""}
         ${p.nejiste ? `<div class="warn">⚠︎ ${esc(p.nejiste)}</div>` : ""}
       </div>`).join("") : `<div class="empty">Na fotkách jsem nenašel žádného pacienta.</div>`;
     obsah += `<div class="grid2" style="margin-top:10px">
@@ -379,7 +426,7 @@ async function nactiZpravy(files) {
     const vykony = p.vykony?.length ? p.vykony : [""];
     for (const v of vykony) {
       const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v) && (!r.datum_narozeni || !p.datum_narozeni || r.datum_narozeni === p.datum_narozeni));
-      polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", vykon: v, poznamka: p.poznamka || "",
+      polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", adresa: p.adresa || "", vykon: v, poznamka: p.poznamka || "",
         nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita, pridat: !!v && !duplicita });
     }
   }
@@ -426,12 +473,14 @@ function viewHovor() {
 }
 
 function viewEmailObjednani(list) {
-  const nove = (typ) => list.filter((r) => r.typ === typ && S.vybrano.has(r.id) && !r.zadost_at);
+  const nove = (typ) => list.filter((r) => r.typ === typ && S.vybrano.has(r.id) && !r.zadost_at && r.zadanka_at);
+  const bezZadanky = list.filter((r) => !r.zadost_at && !r.zadanka_at);
   const sZadosti = list.filter((r) => r.zadost_thread_id);
   const dat = (iso) => { const d = new Date(iso); return `${d.getDate()}.${d.getMonth() + 1}.`; };
   const bezData = Object.keys(OBJ_EMAIL).flatMap(nove).filter((r) => !r.datum_narozeni);
   return `<div class="card">
     <h2>Objednat e-mailem (bez volání)</h2>
+    ${bezZadanky.length ? `<div class="warn">Čeká na žádanku (ve Frontě označte „Žádanka hotová“): ${bezZadanky.map((r) => esc(r.jmeno)).join(", ")}</div>` : ""}
     <small>Připraví koncept mailu se seznamem pacientů (MR → ${esc(OBJ_EMAIL.MR)}, PET → ${esc(OBJ_EMAIL.PET)}). Odpověď pak aplikace hlídá a termíny přiřadí sama.</small>
     ${bezData.length ? `<div class="warn">⚠︎ Bez data narození: ${bezData.map((r) => esc(r.jmeno)).join(", ")} – doplňte ve Frontě (✎).</div>` : ""}
     ${Object.keys(OBJ_EMAIL).filter((t) => t === "MR" || nove(t).length).map((t) => `<button class="primary full" data-act="zadost" data-v="${t}" ${nove(t).length ? "" : "disabled"} style="margin-top:10px">✉︎ Připravit mail pro ${OBJ_KOMU[t]} (${nove(t).length})</button>`).join("")}
@@ -709,7 +758,7 @@ app.addEventListener("submit", async (e) => {
   }
   if (kind === "pridat") {
     const vykon = fd.vykon.trim();
-    const row = { jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
+    const row = { jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, adresa: (fd.adresa || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null };
     const { error } = await sb.from("objednavky").insert(row);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
     await nacti(); S.vybrano = null; render(); toast("Přidáno do fronty");
@@ -732,7 +781,7 @@ app.addEventListener("submit", async (e) => {
   if (kind === "upravit") {
     const vykon = fd.vykon.trim();
     const { error } = await sb.from("objednavky").update({
-      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
+      jmeno: fd.jmeno.trim(), datum_narozeni: fd.datum_narozeni || null, email: fd.email.trim() || null, telefon: (fd.telefon || "").trim() || null, vykon, typ: typZVykonu(vykon), poznamka: fd.poznamka.trim() || null, adresa: (fd.adresa || "").trim() || null, rodne_cislo: (fd.rodne_cislo || "").trim() || null, pojistovna: (fd.pojistovna || "").trim() || null,
     }).eq("id", f.dataset.id);
     if (error) S.msg = { t: "err", m: error.message };
     S.editId = null; await nacti(); S.vybrano = null; render(); return;
@@ -748,13 +797,26 @@ app.addEventListener("click", async (e) => {
     try { await navigator.clipboard.writeText(b.dataset.v || ""); toast("Rodné číslo zkopírováno"); } catch { toast("Kopírování se nepovedlo"); }
     return;
   }
+  if (act === "tiskkartoteka") { tiskKartoteka(); return; }
+  if (act === "predano") {
+    const ids = neregistrovani().flat().filter((r) => !r.registrace_predano_at).map((r) => r.id);
+    const t = new Date().toISOString();
+    await sb.from("objednavky").update({ registrace_predano_at: t }).in("id", ids);
+    await nacti(); render(); toast("Označeno jako předáno kartotéce"); return;
+  }
+  if (act === "zadanka") {
+    const r = S.rows.find((x) => x.id === b.dataset.id); if (!r) return;
+    const ids = S.rows.filter((x) => klicPac(x) === klicPac(r)).map((x) => x.id);
+    await sb.from("objednavky").update({ zadanka_at: new Date().toISOString() }).in("id", ids);
+    await nacti(); render(); toast("Žádanka označena jako hotová"); return;
+  }
   if (act === "kartoteka") {
     const r = S.rows.find((x) => x.id === b.dataset.id); if (!r) return;
     const nova = !r.kartoteka;
     // stejný pacient (jméno + datum narození) může mít víc řádků – přepnout všechny
     const ids = S.rows.filter((x) => norm(x.jmeno) === norm(r.jmeno) && (x.datum_narozeni || "") === (r.datum_narozeni || "")).map((x) => x.id);
     S.rows.forEach((x) => { if (ids.includes(x.id)) x.kartoteka = nova; }); render();
-    const { error } = await sb.from("objednavky").update({ kartoteka: nova }).in("id", ids);
+    const { error } = await sb.from("objednavky").update({ kartoteka: nova, registrace_potvrzena_at: nova ? new Date().toISOString() : null }).in("id", ids);
     if (error) { toast("Uložení selhalo"); await nacti(); render(); }
     return;
   }
@@ -788,7 +850,7 @@ app.addEventListener("click", async (e) => {
   if (act === "vytahni") return vytahni();
   if (act === "zadost") {
     const typ = b.dataset.v;
-    const rows = cekajici(typ).filter((r) => S.vybrano.has(r.id) && !r.zadost_at);
+    const rows = cekajici(typ).filter((r) => S.vybrano.has(r.id) && !r.zadost_at && r.zadanka_at);
     if (!rows.length) return;
     b.disabled = true; b.textContent = "Připravuji koncept…";
     const { predmet, telo } = mailProRecepci(rows, typ);
@@ -868,7 +930,7 @@ app.addEventListener("click", async (e) => {
     const vyber = S.zpravy.polozky.filter((p) => p.pridat);
     if (!vyber.length) { toast("Nic není vybráno"); return; }
     if (vyber.some((p) => !p.jmeno.trim() || !p.vykon.trim())) { toast("Doplňte jméno a výkon"); return; }
-    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null,
+    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null, adresa: (p.adresa || "").trim() || null,
       vykon: p.vykon.trim(), typ: typZVykonu(p.vykon), poznamka: p.poznamka.trim() || null }));
     const { error } = await sb.from("objednavky").insert(rows);
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
