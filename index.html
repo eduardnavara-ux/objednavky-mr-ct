@@ -487,13 +487,37 @@ function viewRegistrace() {
   </div>`;
 }
 function kartotekaHtml() {
-  const sk = neregistrovani().map((g) => ({ ...g[0], vykony: g.map((r) => vykonZobraz(r.vykon)).join(", ") }));
-  const bl = (v) => v ? esc(v) : "…………………………";
-  const radky = sk.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.jmeno)}</b><br>nar. ${r.datum_narozeni ? fmtDatum(r.datum_narozeni) : "…………"}<br>RČ: ${bl(r.rodne_cislo)}<br>poj.: ${bl(r.pojistovna)}</td><td>${bl(r.adresa)}<br>tel.: ${bl(r.telefon)}<br>e-mail: ${bl(r.email)}</td><td>${esc(r.vykony)}</td></tr>`).join("");
-  return `<h1>Žádost o registraci pacientů – ${new Date().toLocaleDateString("cs-CZ")}</h1>
-<table><tr><th>#</th><th>Pacient</th><th>Kontakt</th><th>Výkon</th></tr>${radky}</table>
-<p style="margin-top:18px">Prosím o registraci uvedených pacientů a o <b>e-mailové potvrzení dokončení registrace</b> na adresu <b>eduard.navara@gmail.com</b>.</p>
-<p style="margin-top:30px">MUDr. Eduard Navara, oddělení neurochirurgie</p>`;
+  const sk = neregistrovani().map((g) => g[0]);
+  const lab = (t) => `<span class="kl">${t}</span>`;
+  const tec = (w) => `<span class="kt" style="width:${w}px"></span>`;
+  const hod = (v, w) => v ? esc(v) : tec(w);
+  const bloky = sk.map((r, i) => `<div class="kb"><div class="kn">${i + 1}.</div><div class="kd">
+    <div class="kj">${esc(r.jmeno)}</div>
+    <div class="kr">${lab("Datum narození")} ${r.datum_narozeni ? fmtDatum(r.datum_narozeni) : tec(70)} &nbsp;&nbsp;${lab("Rodné číslo")} ${hod(r.rodne_cislo, 80)} &nbsp;&nbsp;${lab("Pojišťovna")} ${hod(r.pojistovna, 70)}<br>
+    ${lab("Adresa")} ${hod(r.adresa, 230)}<br>
+    ${lab("Telefon")} ${hod(r.telefon, 80)} &nbsp;&nbsp;${lab("E-mail")} ${hod(r.email, 150)}</div></div>
+    <div class="kc"><span class="kbox"></span></div></div>`).join("");
+  return `<style>
+.kp{color:#111;font-family:Arial,Helvetica,sans-serif}
+.kp .kh{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:7px;border-bottom:2.5px solid #111}
+.kp .kt1{font-size:22px;font-weight:700;line-height:1.1}
+.kp .km{font-size:10px;line-height:1.6;text-align:right}.kp .km i{font-style:normal;color:#666}
+.kp .kv{margin:12px 0 16px 14px;font-size:11.5px;line-height:1.55}
+.kp .kb{display:grid;grid-template-columns:26px minmax(0,1fr) 46px;border-top:.6px solid #888;break-inside:avoid;page-break-inside:avoid}
+.kp .kb:last-of-type{border-bottom:.6px solid #888}
+.kp .kn{padding:13px 0 0;font-size:13px;font-weight:700}.kp .kd{padding:12px 0}
+.kp .kj{font-size:14px;font-weight:700}.kp .kr{font-size:11px;margin-top:6px;line-height:1.9}
+.kp .kl{font-size:8.5px;color:#666}.kp .kt{display:inline-block;border-bottom:1px dotted #555;height:10px}
+.kp .kc{display:flex;align-items:center;justify-content:center;border-left:.6px solid #888}
+.kp .kbox{width:17px;height:17px;border:1.2px solid #111;display:inline-block}
+.kp .kz{font-size:8.5px;color:#666;text-align:right;padding:3px 6px 0 0}
+.kp .ks{margin-top:22px;font-size:11px;line-height:1.5}
+</style><div class="kp">
+<div class="kh"><div class="kt1">Registrace pacientů</div><div class="km"><div><i>Datum předání</i>&nbsp; <b>${new Date().toLocaleDateString("cs-CZ").replace(/\s/g, "")}</b></div><div><i>Počet pacientů</i>&nbsp; <b>${sk.length}</b></div></div></div>
+<p class="kv">Prosím o registraci níže uvedených pacientů a o e-mailové potvrzení dokončení registrace na adresu <b>eduard.navara@gmail.com</b>.</p>
+${bloky}
+<div class="kz">Hotovo ↑</div>
+<div class="ks"><b>MUDr. Eduard Navara</b><br>neurochirurgie</div></div>`;
 }
 function viewNahled() {
   if (!S.nahled) return "";
@@ -505,7 +529,7 @@ function viewNahled() {
 function tiskKartoteka() {
   const w = window.open("", "_blank");
   if (!w) { toast("Povolte vyskakovací okno"); return; }
-  w.document.write(`<!doctype html><meta charset="utf-8"><title>Registrace pacientů</title><style>body{font:13px Arial,sans-serif;margin:18mm}table{border-collapse:collapse;width:100%}td,th{border:1px solid #444;padding:5px;vertical-align:top;text-align:left}h1{font-size:17px}</style>${kartotekaHtml()}<script>window.onload=()=>window.print()<\/script>`);
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>Registrace pacientů</title><style>@page{size:A4 portrait;margin:17mm 18mm}body{margin:0;background:#fff}</style>${kartotekaHtml()}<script>window.onload=()=>window.print()<\/script>`);
   w.document.close();
 }
 function itemFronta(r) {
