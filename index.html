@@ -667,7 +667,7 @@ function cesky(n, a, b, c) { return n === 1 ? a : n >= 2 && n <= 4 ? b : c; }
 function mailProRecepci(rows, typ) {
   const predmet = `Objednání ${typ} – neurochirurgie (${rows.length} ${cesky(rows.length, "pacient", "pacienti", "pacientů")})`;
   const radky = rows.map((r, i) => `${i + 1}. ${r.jmeno}${r.datum_narozeni ? `, nar. ${fmtDatum(r.datum_narozeni)}` : ""} – ${r.vykon}` + (typ === "PET" ? `\n   váha: ${r.vaha_kg ? r.vaha_kg + " kg" : "?"}, výška: ${r.vyska_cm ? r.vyska_cm + " cm" : "?"}, cukrovka: ${r.cukrovka ? "ano" : "ne"}, tel. na pacienta: ${r.telefon || "?"}\n   IČP: ${ICP_NCH || "?"} (ambulance neurochirurgie NCH)` : ""));
-  const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : typ === "PET" ? "vyšetření na PET centru" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n${PODPIS}`;
+  const telo = `Dobrý den,\n\nprosím o objednání ${rows.length === 1 ? "následujícího pacienta" : "následujících pacientů"} na ${typ === "MR" ? "MR vyšetření" : typ === "PET" ? "vyšetření na PET centru" : "CT"}:\n\n${radky.join("\n")}\n\nTermíny mi prosím pošlete odpovědí na tento e-mail, pacienty vyrozumím.\n\nDěkuji a s pozdravem,\n\n${PODPIS}`;
   return { predmet, telo };
 }
 
