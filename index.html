@@ -101,9 +101,11 @@ import { SonioxClient } from "https://esm.sh/@soniox/speech-to-text-web@1.4.0";
 const SUPABASE_URL = "https://cjgfarbusdvieempommt.supabase.co";
 const SUPABASE_KEY = "sb_publishable_TVLQbs-h-4FMHu44Znq2sA_Q7uHMyEm";
 // Telefon do mailu pro změnu / zrušení termínu
-const TEL = { MR: "257273202", CT: "257272510" };
+const TEL = { MR: "257273202", CT: "257272510", PET: "257272165" };
 // Výchozí čísla recepce (založí se do záložky Čísla při prvním spuštění)
-const VOLAT = { MR: "257273202", CT: "257272510" };
+const VOLAT = { MR: "257273202", CT: "257272510", PET: "257272165" };
+const KARTOTEKA_TEL = "257272522";
+const NAZEV_TYPU = { MR: "MR", CT: "CT obstřiky", NEU: "Kaudální blok – neurologie", PET: "PET centrum (radionuklidy)" };
 const VYCHOZI_KONTAKTY = [
   { nazev: "Recepce MR", telefon: VOLAT.MR, typ: "MR", poradi: 1 },
   { nazev: "Recepce CT (obstřiky)", telefon: VOLAT.CT, typ: "CT", poradi: 2 },
@@ -114,7 +116,7 @@ const MISTA = {
   "4p": "Nemocnice Na Homolce, 4.patro",
 };
 const MISTA_KRATCE = { "2p": "2. patro", "gama": "Gama", "4p": "4. patro" };
-const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT "];
+const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT ", "kaudální blok", "PET s NaF"];
 // Konverzace v Claude, kde se diktuje hovor (stále stejná, ať nevznikají nové)
 // Objednání e-mailem (místo telefonu)
 const OBJ_EMAIL = { MR: "mr.homolka@fnmh.cz" };
@@ -133,7 +135,7 @@ const S = {
 // ---------- Pomocné ----------
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const enc = encodeURIComponent;
-const typZVykonu = (v) => (/^\s*MR\b/i.test(v || "") ? "MR" : "CT");
+const typZVykonu = (v) => { const m = v || ""; if (/^\s*MR\b/i.test(m)) return "MR"; if (/^\s*PET\b/i.test(m)) return "PET"; if (/kaud|^\s*KB\b/i.test(m)) return "NEU"; return "CT"; };
 const dnesISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const fmtDatum = (d) => { if (!d) return "?"; const [y, m, dd] = d.split("-").map(Number); return `${dd}.${m}.${y}`; };
 const fmtCas = (t) => { if (!t) return "?"; const [h, mi] = t.split(":"); return `${Number(h)}:${mi}`; };
@@ -147,18 +149,20 @@ function genitivPredmet(v) {
   if (/^MR\s*Lp$/i.test(m)) return "MR bederní páteře";
   if (/^MR\s*Cp$/i.test(m)) return "MR krční páteře";
   if (/^obstřik\b/i.test(m)) return "obstřiku" + m.slice(7);
+  if (/^kaudální blok/i.test(m)) return "kaudálního bloku" + m.slice(13);
   return m;
 }
 function vykonVeVete(v) {
   const m = (v || "").trim();
   if (/^obstřik\b/i.test(m)) return "obstřiku" + m.slice(7);
+  if (/^kaudální blok/i.test(m)) return "kaudálního bloku" + m.slice(13);
   return m;
 }
 function sestavMail(rows) {
   const r = [...rows].sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
   const predmet = "termín " + r.map((x) => genitivPredmet(x.vykon)).join(" a ");
   const vety = r.map((x, i) =>
-    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}. Pro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.`);
+    `${i ? "Termín" : "termín"} ${vykonVeVete(x.vykon)} je objednán na ${fmtDatum(x.termin_datum)}, ${fmtCas(x.termin_cas)} hod., ${x.misto}. ${TEL[x.typ] ? `Pro změnu, či zrušení termínu tel.: ${TEL[x.typ]}.` : ""}`.trim());
   if (r.every((x) => x.typ === "MR")) vety[vety.length - 1] += " Po absolvování MR se pro konzultaci výsledků objednejte na mou ambulanci přes recepci.";
   const telo = `Dobrý den,\n\n${vety.join("\n\n")}\n\nS pozdravem,\nNavara`;
   return { predmet, telo };
@@ -255,8 +259,8 @@ function viewFronta() {
   const sekce = (typ) => {
     const list = cekajici(typ);
     return `<div class="card">
-      <div class="row between"><h2 style="margin:0">${typ === "MR" ? "MR" : "CT obstřiky"} – čeká ${list.length}</h2>
-        ${list.length ? `<div class="row"><a class="btn" href="${telHref(cislo(typ))}">📞 Volat</a>
+      <div class="row between"><h2 style="margin:0">${NAZEV_TYPU[typ]} – čeká ${list.length}</h2>
+        ${list.length && cislo(typ) ? `<div class="row"><a class="btn" href="${telHref(cislo(typ))}">📞 Volat</a>
         <button class="primary" data-act="nahovor" data-v="${typ}">Zpracovat hovor</button></div>` : ""}</div>
       <div style="margin-top:6px">${list.length ? list.map(itemFronta).join("") : `<div class="empty">Nikdo nečeká.</div>`}</div>
     </div>`;
@@ -280,7 +284,8 @@ function viewFronta() {
       <button class="primary full">Přidat do fronty</button>
     </form>
   </div>
-  ${sekce("MR")}${sekce("CT")}`;
+  ${sekce("MR")}${sekce("CT")}${cekajici("NEU").length ? sekce("NEU") : ""}${cekajici("PET").length ? sekce("PET") : ""}
+  ${S.rows.some((r) => r.stav === "ceka" && !r.kartoteka) ? `<small>Kartotéka Homolka (registrace, pojišťovna): <a href="${telHref(KARTOTEKA_TEL)}">257 272 522</a></small>` : ""}`;
 }
 
 function itemFronta(r) {
@@ -294,7 +299,8 @@ function itemFronta(r) {
     </form>`;
   }
   return `<div class="item">
-    <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(r.vykon)}</span><br>
+    <div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(r.vykon)}</span>
+      <button class="tag" data-act="kartoteka" data-id="${r.id}" style="border:0;cursor:pointer;${r.kartoteka ? "background:#e7f5ee;color:#1f7a4d" : "background:#fdecea;color:#b42318"}">${r.kartoteka ? "✓ v kartotéce" : "✗ neregistrován"}</button><br>
       ${r.zadost_at ? `<span class="tag" style="background:#e7f5ee;color:#1f7a4d">✉︎ žádost odeslána</span><br>` : ""}<small>${r.email ? esc(r.email) : "bez e-mailu"}${r.telefon ? ` · <a href="${telHref(r.telefon)}">${esc(r.telefon)}</a>` : ""}${r.poznamka ? " · " + esc(r.poznamka) : ""}</small></div>
     <button class="ghost" data-act="edit" data-id="${r.id}" aria-label="Upravit">✎</button>
     <button class="ghost" data-act="smazat" data-id="${r.id}" aria-label="Smazat" style="color:#b42318">🗑</button>
@@ -378,7 +384,7 @@ async function nactiZpravy(files) {
 function viewHovor() {
   const list = cekajici();
   if (!S.vybrano) S.vybrano = new Set(list.map((r) => r.id));
-  const nMR = list.filter((r) => r.typ === "MR").length, nCT = list.length - nMR;
+  const nMR = list.filter((r) => r.typ === "MR").length, nCT = list.filter((r) => r.typ === "CT").length;
   const nVyb = list.filter((r) => S.vybrano.has(r.id)).length;
   return `
   <div class="card">
@@ -733,6 +739,16 @@ app.addEventListener("click", async (e) => {
   const act = b.dataset.act;
   if (act === "gmail") return; // nechat odkaz otevřít
   e.preventDefault();
+  if (act === "kartoteka") {
+    const r = S.rows.find((x) => x.id === b.dataset.id); if (!r) return;
+    const nova = !r.kartoteka;
+    // stejný pacient (jméno + datum narození) může mít víc řádků – přepnout všechny
+    const ids = S.rows.filter((x) => norm(x.jmeno) === norm(r.jmeno) && (x.datum_narozeni || "") === (r.datum_narozeni || "")).map((x) => x.id);
+    S.rows.forEach((x) => { if (ids.includes(x.id)) x.kartoteka = nova; }); render();
+    const { error } = await sb.from("objednavky").update({ kartoteka: nova }).in("id", ids);
+    if (error) { toast("Uložení selhalo"); await nacti(); render(); }
+    return;
+  }
   if (act === "tab") { S.tab = b.dataset.v; S.msg = null; render(); window.scrollTo(0, 0); if (S.tab === "terminy") kontrolaStavu(); return; }
   if (act === "loginmode") { S.loginMode = S.loginMode === "login" ? "register" : "login"; S.msg = null; render(); return; }
   if (act === "odhlasit") { await sb.auth.signOut(); return; }
@@ -1092,7 +1108,7 @@ sb.auth.onAuthStateChange(async (_ev, session) => {
 });
 const { data: { session } } = await sb.auth.getSession();
 S.user = session?.user || null;
-if (S.user) { await nacti(); if (cekajici().length) S.tab = "hovor"; }
+if (S.user) { await nacti(); }
 render();
 if (S.user) kontrolaStavu();
 pushZjistiStav().then(() => { if (S.tab === "cisla") render(); });
