@@ -93,6 +93,44 @@
   .cislo { font-size: 22px; font-weight: 700; letter-spacing: .03em; }
   .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 16px); transform: translateX(-50%);
     background: #17212b; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 10; }
+
+  /* ---- Vizuál (návrh ChatGPT, zapracováno) ---- */
+  :root { --navy: #29475d; --navy-2: #386c99; --bg: #f6f7f9; --text: #202b36; --muted: #687482; --line: #e4e8ed;
+    --ok: #39775a; --ok-bg: #edf6f0; --warn: #a65c17; --warn-bg: #fff5e9; --blue: #386c99; --blue-bg: #edf4fa; --r: 12px;
+    --shadow: 0 2px 6px rgba(32,43,54,.035); }
+  html, body { font-size: 15px; -webkit-font-smoothing: antialiased; }
+  header { background: #fff; color: var(--text); border-bottom: 1px solid var(--line); padding: calc(env(safe-area-inset-top) + 14px) 16px 12px; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
+  header .who { color: var(--muted); }
+  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; margin: 0; gap: 0; padding: 5px 5px calc(5px + env(safe-area-inset-bottom));
+    background: rgba(255,255,255,.97); border-top: 1px solid var(--line); backdrop-filter: blur(12px); max-width: 760px; margin-inline: auto; }
+  nav button { color: var(--muted); font-size: 12px; font-weight: 500; border: 0; border-radius: 8px; min-height: 56px; padding: 5px 2px;
+    flex-direction: column; display: flex; align-items: center; justify-content: center; gap: 2px; }
+  nav button svg { width: 23px; height: 23px; stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  nav button.on { background: #edf2f6; color: var(--navy); font-weight: 650; }
+  nav .n { background: var(--warn); color: #fff; margin: 0; min-width: 18px; line-height: 18px; font-size: 11px; position: absolute; transform: translate(14px,-18px); }
+  nav button { position: relative; }
+  main { padding: 16px 16px calc(96px + env(safe-area-inset-bottom)); }
+  .card { border-radius: var(--r); box-shadow: var(--shadow); padding: 14px; }
+  button, .btn { border-radius: 8px; min-height: 44px; font-size: 14px; border-color: var(--line); }
+  button.primary, .btn.primary { background: var(--navy); border-color: var(--navy); }
+  input, select, textarea { border-color: var(--line); border-radius: 8px; min-height: 46px; }
+  .tag { border-radius: 6px; background: #edf2f6; color: var(--navy); }
+  .souhrn { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 18px; }
+  .souhrn div { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 11px; box-shadow: var(--shadow); }
+  .souhrn b { display: block; font-size: 27px; line-height: 1.2; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .souhrn span { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .skup { margin-bottom: 24px; }
+  .skup h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 650; margin: 0 0 10px; letter-spacing: -.02em; }
+  .skup h2 i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .skup h2 em { margin-left: auto; font-style: normal; font-size: 13px; color: var(--muted); font-weight: 500; }
+  .skup.akce h2 { color: var(--warn); } .skup.ceka h2 { color: var(--blue); } .skup.hotovo h2 { color: var(--ok); }
+  .skup h2 { color: var(--text); }
+  .pac { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow); border-left-width: 4px; }
+  .skup.akce .pac { border-left-color: var(--warn); } .skup.ceka .pac { border-left-color: var(--blue); } .skup.hotovo .pac { border-left-color: var(--ok); }
+  .pac .item { border-top: 0; padding: 0; }
+  .dalsi { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; padding: 3px 8px; border-radius: 6px; }
+  .skup.akce .dalsi { background: var(--warn-bg); color: var(--warn); } .skup.ceka .dalsi { background: var(--blue-bg); color: var(--blue); } .skup.hotovo .dalsi { background: var(--ok-bg); color: var(--ok); }
 </style>
 </head>
 <body>
@@ -230,10 +268,10 @@ function render() {
   <header>
     <div class="top"><h1>Objednávky MR / CT</h1><button class="who" data-act="odhlasit">Odhlásit</button></div>
     <nav>
-      <button class="${S.tab === "fronta" ? "on" : ""}" data-act="tab" data-v="fronta">Fronta<span class="n">${nCeka}</span></button>
-      <button class="${S.tab === "hovor" ? "on" : ""}" data-act="tab" data-v="hovor">Objednávka</button>
-      <button class="${S.tab === "terminy" ? "on" : ""}" data-act="tab" data-v="terminy">Termíny${nMail ? `<span class="n">${nMail}</span>` : ""}</button>
-      <button class="${S.tab === "cisla" ? "on" : ""}" data-act="tab" data-v="cisla">Nastavení</button>
+      <button class="${S.tab === "fronta" ? "on" : ""}" data-act="tab" data-v="fronta"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Fronta<span class="n">${nCeka}</span></button>
+      <button class="${S.tab === "hovor" ? "on" : ""}" data-act="tab" data-v="hovor"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM4 7l8 6 8-6"/></svg>Objednávka</button>
+      <button class="${S.tab === "terminy" ? "on" : ""}" data-act="tab" data-v="terminy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM5 10h14M9 3v4M15 3v4"/></svg>Termíny${nMail ? `<span class="n">${nMail}</span>` : ""}</button>
+      <button class="${S.tab === "cisla" ? "on" : ""}" data-act="tab" data-v="cisla"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Nastavení</button>
     </nav>
   </header>
   <main>
@@ -296,7 +334,8 @@ function viewFronta() {
   </div>
   <div class="card"><input id="hledej" placeholder="🔍 Najít pacienta (i už objednaného)" value="${esc(S.hledej || "")}" autocomplete="off"><div id="hledej-vysl">${vyslHledani()}</div></div>
   ${viewRegistrace()}
-  ${sekce("MR")}${sekce("CT")}${cekajici("NEU").length ? sekce("NEU") : ""}${cekajici("PET").length ? sekce("PET") : ""}
+  ${viewSkupiny()}
+  ${viewHovory()}
   ${S.rows.some((r) => r.stav === "ceka" && !r.kartoteka) ? `<small>Kartotéka Homolka (registrace, pojišťovna): <a href="${telHref(KARTOTEKA_TEL)}">257 272 522</a></small>` : ""}`;
 }
 
@@ -306,6 +345,32 @@ function vyslHledani() {
   const stavy = { ceka: "čeká", objednano: "objednáno", koncept: "koncept mailu", mail_odeslan: "mail odeslán" };
   return nalez.length ? nalez.map((r) => `<div class="item"><div class="grow"><b>${esc(r.jmeno)}</b>${r.datum_narozeni ? ` <small>nar. ${fmtDatum(r.datum_narozeni)}</small>` : ""} <span class="tag">${esc(vykonZobraz(r.vykon))}</span> <span class="tag">${stavy[r.stav] || esc(r.stav)}</span>${r.termin_datum ? ` <small>${fmtDatum(r.termin_datum)} ${esc(r.termin_cas || "")} ${esc(mistoKratce(r.misto))}</small>` : ""}<br>
     <small>RČ: ${r.rodne_cislo ? `<b>${esc(r.rodne_cislo)}</b> <button class="ghost" data-act="kopirovat" data-v="${esc(r.rodne_cislo)}" style="padding:0 4px">⧉</button>` : "–"} · pojišťovna: ${esc(r.pojistovna) || "–"}${r.adresa ? " · " + esc(r.adresa) : ""}${r.telefon ? ` · ${esc(r.telefon)}` : ""}${r.email ? " · " + esc(r.email) : ""}</small></div></div>`).join("") : `<div class="empty">Nikdo takový v aplikaci není.</div>`;
+}
+function faze(r) {
+  if (r.stav !== "ceka") return { g: "hotovo", t: r.stav === "mail_odeslan" ? "pacient vyrozuměn" : r.stav === "koncept" ? "koncept mailu pacientovi" : "termín objednán – mail pacientovi" };
+  if (!r.kartoteka) return r.registrace_predano_at ? { g: "ceka", t: "čeká na potvrzení registrace z kartotéky" } : { g: "akce", t: "předat kartotéce k registraci" };
+  if (!r.zadanka_at) return { g: "akce", t: "vytvořit žádanku" };
+  if (r.doplneni_thread_id && !(r.rodne_cislo && r.pojistovna)) return { g: "ceka", t: "čeká na RČ a pojišťovnu od pacienta" };
+  if (!r.zadost_at) return { g: "akce", t: "objednat u recepce" };
+  return { g: "ceka", t: "čeká na termín od recepce" };
+}
+function viewSkupiny() {
+  const tyden = Date.now() - 7 * 864e5;
+  const rs = S.rows.filter((r) => r.stav === "ceka" || new Date(r.updated_at || r.created_at).getTime() > tyden);
+  const sk = { akce: [], ceka: [], hotovo: [] };
+  rs.forEach((r) => sk[faze(r).g].push(r));
+  const razeni = (a, b) => (a.jmeno || "").localeCompare(b.jmeno || "", "cs");
+  const nazvy = { akce: "Vyžadují akci", ceka: "Čekají", hotovo: "Vyřešeno tento týden" };
+  const karta = (r) => `<div class="pac">${itemFronta(r)}<span class="dalsi">${r.stav === "ceka" && S.editId !== r.id ? "Další krok: " : ""}${esc(faze(r).t)}</span></div>`;
+  const hotovoKarta = (r) => `<div class="pac"><b>${esc(r.jmeno)}</b> <span class="tag">${esc(vykonZobraz(r.vykon))}</span><br><small>${r.termin_datum ? `${fmtDatum(r.termin_datum)} ${esc((r.termin_cas || "").slice(0, 5))} · ${esc(mistoKratce(r.misto))}` : ""}</small><br><span class="dalsi">${esc(faze(r).t)}</span></div>`;
+  return `<div class="souhrn"><div><b style="color:var(--warn)">${sk.akce.length}</b><span>vyžadují akci</span></div><div><b style="color:var(--blue)">${sk.ceka.length}</b><span>čekají</span></div><div><b style="color:var(--ok)">${sk.hotovo.length}</b><span>vyřešeno</span></div></div>
+  ${["akce", "ceka"].map((g) => `<section class="skup ${g}"><h2><i></i>${nazvy[g]}<em>${sk[g].length}</em></h2>${sk[g].length ? sk[g].sort(razeni).map(karta).join("") : `<div class="empty">Nic.</div>`}</section>`).join("")}
+  <section class="skup hotovo"><details><summary style="font-size:17px;font-weight:650;color:var(--ok);margin:0 0 10px"><i></i>${nazvy.hotovo} (${sk.hotovo.length})</summary>${sk.hotovo.sort(razeni).map(hotovoKarta).join("") || `<div class="empty">Nic.</div>`}</details></section>`;
+}
+function viewHovory() {
+  const typy = ["MR", "CT", "NEU", "PET"].filter((t) => cekajici(t).length);
+  if (!typy.length) return "";
+  return `<div class="card"><h2 style="margin-bottom:8px">Zavolat a objednat</h2><div class="row">${typy.map((t) => `<button class="primary" data-act="nahovor" data-v="${t}">${t === "NEU" ? "KB" : t} (${cekajici(t).length}) – zpracovat hovor</button>${cislo(t) ? `<a class="btn" href="${telHref(cislo(t))}">📞</a>` : ""}`).join("")}</div></div>`;
 }
 function neregistrovani() {
   const m = new Map();
