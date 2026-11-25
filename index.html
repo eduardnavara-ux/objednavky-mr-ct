@@ -837,10 +837,7 @@ function viewTerminy() {
   <h3>Koncept v Gmailu – čeká na odeslání (${kon.length})</h3>
   <div class="card">
     ${kon.length ? kartyKon : `<div class="empty">Žádné koncepty k odeslání.</div>`}
-    ${kon.length ? `<div class="grid2" style="margin-top:10px">
-      <a class="btn primary" href="${(kon.length === 1 && gmailKonceptUrl(kon[0])) || gmailKonceptyUrl()}" target="_blank" rel="noopener" data-act="gmail">✉︎ Otevřít ${kon.length === 1 ? "koncept" : "Gmail"}</a>
-      <button data-act="kontrola">↻ Zkontrolovat odeslání</button></div>
-      <small>Po odeslání v Gmailu se stav změní sám${cas ? ` · kontrolováno ${cas}` : ""}.</small>` : ""}
+    ${kon.length ? `<small>Kontrola odeslání probíhá automaticky${cas ? ` · naposledy ${cas}` : ""}. <button class="ghost" data-act="kontrola" style="padding:2px 8px">zkontrolovat hned</button></small>` : ""}
   </div>
   <h3>Odesláno – nadcházející termíny (${budouci.length})</h3>
   <div class="card">${budouci.length ? budouci.map(radek).join("") : `<div class="empty">Žádné.</div>`}</div>
@@ -1445,8 +1442,10 @@ async function potvrdit(info = {}) {
 
 // Po návratu do aplikace načíst čerstvá data (upozornění z hlídače)
 document.addEventListener("visibilitychange", async () => {
-  if (document.visibilityState === "visible" && S.user && !S.busy && !S.nahrava && !S.vysledek && !S.zpravy && !S.editId) { await nacti(); render(); }
+  if (document.visibilityState === "visible" && S.user && !S.busy && !S.nahrava && !S.vysledek && !S.zpravy && !S.editId) { await nacti(); render(); kontrolaStavu(); }
 });
+// Automatická kontrola odeslaných konceptů (každých 30 s, jen když je aplikace vidět)
+setInterval(() => { if (document.visibilityState === "visible" && S.user && !S.busy) kontrolaStavu(); }, 30000);
 
 // ---------- Start ----------
 sb.auth.onAuthStateChange(async (_ev, session) => {
