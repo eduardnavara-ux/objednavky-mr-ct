@@ -212,7 +212,7 @@ const RYCHLE = ["MR Lp", "MR Cp", "obstřik SIK pod CT", "PRT ", "kaudální blo
 // Objednání e-mailem (místo telefonu)
 const OBJ_EMAIL = { MR: "mr.homolka@fnmh.cz", PET: "pet@fnmh.cz" };
 const OBJ_KOMU = { MR: "MR recepci", PET: "PET centrum" };
-const ICP_NCH = ""; // IČP ambulance neurochirurgie NCH – doplnit
+const ICP_NCH = "05004596"; // IČP ambulance neurochirurgie NCH
 const PODPIS = "MUDr. Eduard Navara\nneurochirurgie\nNemocnice Na Homolce";
 const CLAUDE_CHAT = "https://claude.ai/chat/16b5c444-abb4-4901-ab2f-ba9c950255c0";
 
@@ -353,7 +353,6 @@ function viewFronta() {
   return `
   ${viewSkupiny()}
   ${viewRegistrace()}
-  ${viewHovory()}
   <details class="card"><summary style="margin:0;font-weight:650;font-size:16px;color:var(--text)">Přidat pacienta ručně</summary>
     <form data-form="pridat" autocomplete="off" style="margin-top:10px">
       <div class="grid2 resp">
@@ -394,7 +393,7 @@ function faze(r) {
   if (!r.zadost_at) return { g: "akce", t: "objednat u recepce", krok: "objednat" };
   return { g: "ceka", t: "čeká na termín od recepce" };
 }
-const SEKCE = [["MR", "MR", (r) => r.typ === "MR"], ["PRT", "PRT / obstřiky", (r) => r.typ === "CT"], ["PET", "PET s NaF", (r) => r.typ === "PET"], ["KB", "KB", (r) => r.typ === "NEU"]];
+const SEKCE = [["MR", "MR", (r) => r.typ === "MR"], ["PET", "PET s NaF", (r) => r.typ === "PET"], ["PRT", "PRT / obstřiky", (r) => r.typ === "CT"], ["KB", "KB", (r) => r.typ === "NEU"]];
 const fronta = () => S.rows.filter((r) => r.stav === "ceka" && !r.zadost_at);
 function kartaPac(r) {
   if (S.editId === r.id) return itemFronta(r);
@@ -457,7 +456,7 @@ function viewDetail() {
       <ul class="timeline">${h.map(([t, n]) => `<li class="done"><span class="tl-dot"></span><b>${n}</b><small>${kdyz(t)} ${new Date(t).toTimeString().slice(0, 5)}</small></li>`).join("")}${f.g !== "hotovo" ? `<li class="now"><span class="tl-dot"></span><b>${esc(f.t)}</b></li>` : ""}</ul>
     </div>
     <div class="sheet-foot">
-      <div class="row" style="flex-wrap:nowrap">${r.telefon ? `<a class="btn grow" href="${telHref(r.telefon)}">📞 Zavolat</a>` : ""}${r.email ? `<a class="btn grow" href="mailto:${esc(r.email)}">✉︎ E-mail</a>` : ""}<button class="grow" data-act="upravitdetail" data-id="${r.id}">✎ Upravit</button></div>
+      <div class="row" style="flex-wrap:nowrap">${r.telefon ? `<a class="btn grow" href="${telHref(r.telefon)}">📞 Zavolat</a>` : ""}${r.email ? `<button class="grow" data-act="mailkoncept" data-id="${r.id}">✉︎ E-mail</button>` : ""}<button class="grow" data-act="upravitdetail" data-id="${r.id}">✎ Upravit</button></div>
       ${krok ? `<button class="primary full" data-act="${krok[0]}" data-id="${r.id}">${krok[1]}</button>` : ""}
     </div></div>`;
 }
@@ -564,7 +563,7 @@ function viewZeZpravy() {
         <div class="grid2 resp" style="margin-top:8px">
           <input data-z="${i}" data-k="vykon" value="${esc(p.vykon)}" placeholder="Výkon">
           <input data-z="${i}" data-k="poznamka" value="${esc(p.poznamka)}" placeholder="Poznámka"></div>
-        ${p.duplicita ? `<div class="warn">⚠︎ Stejný pacient s tímto výkonem už ve frontě čeká.</div>` : ""}
+        ${p.duplicita ? `<div class="warn">ℹ︎ Pacient už ve frontě čeká – doplním mu jen chybějící údaje (RČ, pojišťovna, adresa…), nový záznam nevznikne.</div>` : ""}
         ${!p.email ? `<div class="warn">⚠︎ Na zprávě jsem nenašel e-mail.</div>` : ""}
         ${!p.datum_narozeni ? `<div class="warn">⚠︎ Chybí datum narození.</div>` : ""}
         ${!p.adresa ? `<div class="warn">⚠︎ Chybí adresa (potřebná pro kartotéku).</div>` : ""}
@@ -612,9 +611,9 @@ async function nactiZpravy(files) {
   for (const p of data.pacienti || []) {
     const vykony = p.vykony?.length ? p.vykony : [""];
     for (const v of vykony) {
-      const duplicita = !!v && cekajici().some((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v) && (!r.datum_narozeni || !p.datum_narozeni || r.datum_narozeni === p.datum_narozeni));
+      const dup = !!v && cekajici().find((r) => norm(r.jmeno) === norm(p.jmeno) && norm(r.vykon) === norm(v) && (!r.datum_narozeni || !p.datum_narozeni || r.datum_narozeni === p.datum_narozeni));
       polozky.push({ jmeno: p.jmeno || "", datum_narozeni: p.datum_narozeni || "", email: p.email || "", telefon: p.telefon || "", adresa: p.adresa || "", rodne_cislo: p.rodne_cislo || "", pojistovna: p.pojistovna || "", vaha_kg: p.vaha_kg || "", vyska_cm: p.vyska_cm || "", vykon: v, poznamka: p.poznamka || "",
-        nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita, pridat: !!v && !duplicita });
+        nejiste: p.nejiste || (!v ? "Na zprávě jsem nenašel, co objednat." : null), duplicita: !!dup, dupId: dup ? dup.id : null, pridat: !!v });
     }
   }
   S.zpravy = { polozky }; render();
@@ -1128,15 +1127,35 @@ app.addEventListener("click", async (e) => {
     render(); if (!res.error) toast("Koncept je v Gmailu"); return;
   }
   if (act === "zpravyzrusit") { S.zpravy = null; render(); return; }
+  if (act === "mailkoncept") {
+    const r0 = S.rows.find((x) => String(x.id) === String(b.dataset.id));
+    if (!r0 || !r0.email) { toast("Chybí e-mail"); return; }
+    b.disabled = true;
+    const res = await volejGmail({ action: "koncepty", maily: [{ klic: String(r0.id), to: r0.email, predmet: "", telo: "Dobrý den,\n\n\n\nS pozdravem,\nNavara" }] });
+    b.disabled = false;
+    toast(res?.error ? "Koncept se nepodařilo vytvořit: " + res.error : "Koncept je v Gmailu (štítek Vasmedic)");
+    return;
+  }
   if (act === "zpravypridat") {
     const vyber = S.zpravy.polozky.filter((p) => p.pridat);
     if (!vyber.length) { toast("Nic není vybráno"); return; }
     if (vyber.some((p) => !p.jmeno.trim() || !p.vykon.trim())) { toast("Doplňte jméno a výkon"); return; }
-    const rows = vyber.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null, adresa: (p.adresa || "").trim() || null, rodne_cislo: (p.rodne_cislo || "").trim() || null, pojistovna: (p.pojistovna || "").trim() || null, vaha_kg: Number(String(p.vaha_kg || "").replace(",", ".")) || null, vyska_cm: Number(p.vyska_cm) || null,
+    const nove = vyber.filter((p) => !p.dupId);
+    const slouc = vyber.filter((p) => p.dupId);
+    const rows = nove.map((p) => ({ jmeno: p.jmeno.trim(), datum_narozeni: p.datum_narozeni || null, email: p.email.trim() || null, telefon: p.telefon.trim() || null, adresa: (p.adresa || "").trim() || null, rodne_cislo: (p.rodne_cislo || "").trim() || null, pojistovna: (p.pojistovna || "").trim() || null, vaha_kg: Number(String(p.vaha_kg || "").replace(",", ".")) || null, vyska_cm: Number(p.vyska_cm) || null,
       vykon: p.vykon.trim(), typ: typZVykonu(p.vykon), poznamka: p.poznamka.trim() || null }));
-    const { error } = await sb.from("objednavky").insert(rows);
+    let error = null;
+    if (rows.length) ({ error } = await sb.from("objednavky").insert(rows));
+    for (const p of slouc) {
+      if (error) break;
+      const r0 = (S.rows || []).find((x) => x.id === p.dupId) || {};
+      const pole = { datum_narozeni: p.datum_narozeni, email: p.email, telefon: p.telefon, adresa: p.adresa, rodne_cislo: p.rodne_cislo, pojistovna: p.pojistovna, vaha_kg: p.vaha_kg, vyska_cm: p.vyska_cm };
+      const patch = {};
+      for (const [k, v] of Object.entries(pole)) { const t = String(v ?? "").trim(); if (t && !r0[k]) patch[k] = t; }
+      if (Object.keys(patch).length) ({ error } = await sb.from("objednavky").update(patch).eq("id", p.dupId));
+    }
     if (error) { S.msg = { t: "err", m: "Uložení selhalo: " + error.message }; render(); return; }
-    S.zpravy = null; S.vybrano = null; await nacti(); render(); toast(`Přidáno do fronty: ${rows.length}`); return;
+    S.zpravy = null; S.vybrano = null; await nacti(); render(); toast(`Přidáno: ${rows.length}, doplněno: ${slouc.length}`); return;
   }
   if (act === "pushzapnout") { b.disabled = true; b.textContent = "Zapínám…"; try { await pushZapnout(); } catch (e) { S.msg = { t: "err", m: "Zapnutí selhalo: " + e.message }; render(); } return; }
   if (act === "pushtest") { const { data } = await sb.functions.invoke("push", { body: { action: "test" } }); toast(data?.odeslano ? "Odesláno – za chvíli přijde" : "Nic se neodeslalo"); return; }
