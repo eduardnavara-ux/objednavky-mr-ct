@@ -524,12 +524,24 @@ function viewNahled() {
   return `<div class="sheet-bg" data-act="zavritnahled"></div><div class="sheet" style="max-height:94dvh"><div class="sheet-handle"></div>
     <div class="sheet-head"><div><h2>Náhled papíru pro kartotéku</h2><div class="sheet-sub">Zkontrolujte, doplňte čáry rukou a vytiskněte</div></div><button class="ghost" data-act="zavritnahled">✕</button></div>
     <div class="sheet-body"><div class="papir">${kartotekaHtml()}</div></div>
-    <div class="sheet-foot"><div class="row" style="flex-wrap:nowrap"><button class="grow" data-act="zavritnahled">Zpět</button><button class="primary grow" data-act="tiskkartoteka">🖨 Vytisknout</button></div></div></div>`;
+    <div class="sheet-foot"><div class="row" style="flex-wrap:nowrap"><button class="grow" data-act="zavritnahled">Zpět</button><button class="primary grow" data-act="tiskkartoteka">${jeMobil() ? "📤 Poslat k tisku" : "🖨 Vytisknout"}</button></div></div></div>`;
 }
-function tiskKartoteka() {
+const jeMobil = () => matchMedia("(pointer:coarse)").matches && /iPhone|iPad|Android/i.test(navigator.userAgent);
+function kartotekaDokument(auto) {
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registrace pacientů</title><style>@page{size:A4 portrait;margin:17mm 18mm}body{margin:0;background:#fff}@media screen{body{max-width:190mm;margin:12mm auto;padding:0 6mm}}</style>${kartotekaHtml()}${auto ? "<script>window.onload=()=>window.print()<\/script>" : ""}`;
+}
+async function tiskKartoteka() {
+  // Na telefonu nejde tisknout: sdílet soubor (e-mail sobě, AirDrop, Soubory) a vytisknout na počítači
+  if (jeMobil() && navigator.share) {
+    const dnes = new Date().toISOString().slice(0, 10);
+    const f = new File([kartotekaDokument(false)], `registrace-pacientu-${dnes}.html`, { type: "text/html" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: "Registrace pacientů" }); return; }
+    } catch (e) { if (e && e.name === "AbortError") return; }
+  }
   const w = window.open("", "_blank");
   if (!w) { toast("Povolte vyskakovací okno"); return; }
-  w.document.write(`<!doctype html><meta charset="utf-8"><title>Registrace pacientů</title><style>@page{size:A4 portrait;margin:17mm 18mm}body{margin:0;background:#fff}</style>${kartotekaHtml()}<script>window.onload=()=>window.print()<\/script>`);
+  w.document.write(kartotekaDokument(true));
   w.document.close();
 }
 function itemFronta(r) {
