@@ -812,10 +812,25 @@ async function kontrolaStavu() {
   if (S.tab === "terminy") render();
 }
 
+function terminEditor(r) {
+  const klic = Object.keys(MISTA).find((k) => MISTA[k] === r.misto);
+  const opt = (v, t) => `<option value="${v}" ${(klic || "jine") === v ? "selected" : ""}>${t}</option>`;
+  return `<div class="card" style="margin:8px 0;background:#f6f8fa">
+    <b>${esc(r.vykon)}</b>
+    <label class="f">Datum</label><input type="date" id="edat" value="${esc(r.termin_datum || "")}">
+    <label class="f">Čas</label><input type="time" id="ecas" value="${esc((r.termin_cas || "").slice(0, 5))}">
+    <label class="f">Místo</label><select id="emisto">${opt("4p", "4. patro")}${opt("gama", "budova Gama")}${opt("2p", "2. patro (sály)")}${opt("pet", "PET centrum")}${opt("jine", "jiné…")}</select>
+    <input id="emistotext" placeholder="Místo (při volbě „jiné“)" value="${klic ? "" : esc(r.misto || "")}" style="margin-top:8px">
+    <label class="f">Poznámka do mailu pacientovi (např. upřesnění místa, patro)</label>
+    <textarea id="epozn" rows="3">${esc(r.poznamka_mail || "")}</textarea>
+    ${r.stav === "mail_odeslan" ? `<div class="warn">⚠︎ Mail s tímto termínem už byl pacientovi odeslán. Změna se uloží jen v aplikaci, pacienta uvědomte zvlášť.</div>` : ""}
+    <div class="row" style="margin-top:8px;flex-wrap:nowrap"><button class="grow" data-act="terminzrusitedit">Zpět</button><button class="primary grow" data-act="terminuloz" data-id="${r.id}">Uložit změny</button></div>
+  </div>`;
+}
 function terminyLi(rows, zrusit = true) {
-  return `<ul class="terms">${rows.map((r) => `<li><span class="tag">${esc(r.vykon)}</span>
-    <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}</span>
-    ${zrusit ? `<button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button>` : ""}</li>`).join("")}</ul>`;
+  return `<ul class="terms">${rows.map((r) => S.terminEdit === r.id ? `<li style="display:block">${terminEditor(r)}</li>` : `<li><span class="tag">${esc(r.vykon)}</span>
+    <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}${r.poznamka_mail ? " · ✉︎ poznámka" : ""}</span>
+    ${zrusit ? `<button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button>` : ""}</li>`).join("")}</ul>`;
 }
 
 function viewTerminy() {
@@ -862,10 +877,10 @@ function viewTerminy() {
     .sort((a, b) => (a.termin_datum + a.termin_cas).localeCompare(b.termin_datum + b.termin_cas));
   const budouci = odeslane.filter((r) => r.termin_datum >= dnes);
   const probehle = odeslane.filter((r) => r.termin_datum < dnes).reverse();
-  const radek = (r) => `<div class="item"><div class="grow">
+  const radek = (r) => S.terminEdit === r.id ? `<div class="item" style="display:block">${terminEditor(r)}</div>` : `<div class="item"><div class="grow">
       <b>${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)}</b> · ${esc(r.jmeno)} <span class="tag">${esc(r.vykon)}</span><br>
       <small>${esc(mistoKratce(r.misto))}${r.email ? " · " + esc(r.email) : ""} · ✓ odesláno</small></div>
-      <button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></div>`;
+      <button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></div>`;
   const cas = S.posledniKontrola ? S.posledniKontrola.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : null;
 
   return `
@@ -1157,8 +1172,21 @@ app.addEventListener("click", async (e) => {
     if (error) S.msg = { t: "err", m: error.message };
     await nacti(); render(); toast("Označeno jako odeslané"); return;
   }
+  if (act === "upravittermin") { S.terminEdit = b.dataset.id; render(); return; }
+  if (act === "terminzrusitedit") { S.terminEdit = null; render(); return; }
+  if (act === "terminuloz") {
+    const d = document.getElementById("edat")?.value, c = document.getElementById("ecas")?.value, m = document.getElementById("emisto")?.value || "4p";
+    const mt = (document.getElementById("emistotext")?.value || "").trim();
+    if (!d || !c) { toast("Doplňte datum a čas"); return; }
+    if (m === "jine" && !mt) { toast("Doplňte místo"); return; }
+    const x = S.rows.find((q) => q.id === b.dataset.id);
+    if (x?.stav === "koncept" && !confirm("Koncept v Gmailu zůstane ve starém znění. Pokračovat?")) return;
+    const { error } = await sb.from("objednavky").update({ termin_datum: d, termin_cas: c, misto: m === "jine" ? mt : MISTA[m], poznamka_mail: (document.getElementById("epozn")?.value || "").trim() || null }).eq("id", b.dataset.id);
+    if (error) { toast("Uložení selhalo: " + error.message); return; }
+    S.terminEdit = null; await nacti(); render(); toast("Termín upraven"); return;
+  }
   if (act === "zrusit") {
-    if (!confirm("Zrušit tento termín? (zůstane jen v databázi jako zrušený)")) return;
+    if (!confirm("Zrušit tento termín? Zmizí ze seznamů (k změně data, času nebo místa použijte „upravit“).")) return;
     await sb.from("objednavky").update({ stav: "zruseno" }).eq("id", b.dataset.id);
     await nacti(); render(); return;
   }
