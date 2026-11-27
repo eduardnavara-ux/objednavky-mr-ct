@@ -817,8 +817,8 @@ function terminEditor(r) {
   const opt = (v, t) => `<option value="${v}" ${(klic || "jine") === v ? "selected" : ""}>${t}</option>`;
   return `<div class="card" style="margin:8px 0;background:#f6f8fa">
     <b>${esc(r.vykon)}</b>
-    <label class="f">Datum</label><input type="date" id="edat" value="${esc(r.termin_datum || "")}">
-    <label class="f">Čas</label><input type="time" id="ecas" value="${esc((r.termin_cas || "").slice(0, 5))}">
+    <div class="grid2"><div><label class="f">Datum</label><input type="date" id="edat" value="${esc(r.termin_datum || "")}"></div>
+    <div><label class="f">Čas</label><input type="time" id="ecas" value="${esc((r.termin_cas || "").slice(0, 5))}"></div></div>
     <label class="f">Místo</label><select id="emisto">${opt("4p", "4. patro")}${opt("gama", "budova Gama")}${opt("2p", "2. patro (sály)")}${opt("pet", "PET centrum")}${opt("jine", "jiné…")}</select>
     <input id="emistotext" placeholder="Místo (při volbě „jiné“)" value="${klic ? "" : esc(r.misto || "")}" style="margin-top:8px">
     <label class="f">Poznámka do mailu pacientovi (např. upřesnění místa, patro)</label>
@@ -830,7 +830,7 @@ function terminEditor(r) {
 function terminyLi(rows, zrusit = true) {
   return `<ul class="terms">${rows.map((r) => S.terminEdit === r.id ? `<li style="display:block">${terminEditor(r)}</li>` : `<li><span class="tag">${esc(r.vykon)}</span>
     <span class="grow">${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)} · ${esc(mistoKratce(r.misto))}${r.poznamka_mail ? " · ✉︎ poznámka" : ""}</span>
-    ${zrusit ? `<button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button>` : ""}</li>`).join("")}</ul>`;
+    ${zrusit ? `<span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></span>` : ""}</li>`).join("")}</ul>`;
 }
 
 function viewTerminy() {
@@ -880,7 +880,7 @@ function viewTerminy() {
   const radek = (r) => S.terminEdit === r.id ? `<div class="item" style="display:block">${terminEditor(r)}</div>` : `<div class="item"><div class="grow">
       <b>${denTydne(r.termin_datum)} ${fmtDatum(r.termin_datum)} ${fmtCas(r.termin_cas)}</b> · ${esc(r.jmeno)} <span class="tag">${esc(r.vykon)}</span><br>
       <small>${esc(mistoKratce(r.misto))}${r.email ? " · " + esc(r.email) : ""} · ✓ odesláno</small></div>
-      <button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></div>`;
+      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><button class="ghost" data-act="upravittermin" data-id="${r.id}">upravit</button><button class="ghost" data-act="zrusit" data-id="${r.id}">zrušit</button></span></div>`;
   const cas = S.posledniKontrola ? S.posledniKontrola.toLocaleTimeString("cs-CZ", { hour: "2-digit", minute: "2-digit" }) : null;
 
   return `
